@@ -82,12 +82,48 @@ function Grant-CloudFrontOriginAccess($State) {
     Set-StateValue $State 'CloudFrontPrefixListId' $prefix
 }
 
+function Revoke-DirectOriginAccess($State) {
+    $group = (Invoke-Aws @('ec2', 'describe-security-groups', '--group-ids', $State.SecurityGroupId,
+        '--region', $Region, '--output', 'json')) | ConvertFrom-Json
+    $cidrs = @($group.SecurityGroups[0].IpPermissions |
+        Where-Object { $_.IpProtocol -eq 'tcp' -and $_.FromPort -eq 8080 -and $_.ToPort -eq 8080 } |
+        ForEach-Object { $_.IpRanges } | ForEach-Object { $_.CidrIp } | Where-Object { $_ })
+    foreach ($cidr in $cidrs) {
+        try {
+            Invoke-Aws @('ec2', 'revoke-security-group-ingress', '--group-id', $State.SecurityGroupId,
+                '--protocol', 'tcp', '--port', '8080', '--cidr', $cidr, '--region', $Region) | Out-Null
+        } catch {
+            if ($_.Exception.Message -notmatch 'InvalidPermission.NotFound') { throw }
+        }
+    }
+}
+
+function Complete-Distribution($State, $Distribution) {
+    if ($Distribution.Status -ne 'Deployed') {
+        Write-Host 'Esperando la propagación global de CloudFront...'
+        Invoke-Aws @('cloudfront', 'wait', 'distribution-deployed', '--id', $Distribution.Id) | Out-Null
+    }
+    $url = "https://$($Distribution.DomainName)/health"
+    $healthy = $false
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        try {
+            $response = Invoke-RestMethod -Uri $url -TimeoutSec 20
+            if ($response.status -eq 'ok') { $healthy = $true; break }
+        } catch {
+            if ($attempt -eq 6) { throw }
+            Start-Sleep -Seconds (5 * $attempt)
+        }
+    }
+    if (-not $healthy) { throw 'CloudFront se desplegó, pero la comprobación HTTPS no respondió correctamente.' }
+    Revoke-DirectOriginAccess $State
+    Write-Host "Portal HTTPS: https://$($Distribution.DomainName)/"
+}
+
 function Deploy-Distribution {
     $state = Read-PortalState
     $existing = Get-Distribution $state
     if ($existing) {
-        Write-Host "Portal HTTPS: https://$($existing.Distribution.DomainName)/"
-        Write-Host "CloudFront: $($existing.Distribution.Status)"
+        Complete-Distribution $state $existing.Distribution
         return
     }
 
@@ -141,8 +177,7 @@ function Deploy-Distribution {
     Set-StateValue $state 'CloudFrontId' $created.Distribution.Id
     Set-StateValue $state 'CloudFrontDomain' $created.Distribution.DomainName
     Save-PortalState $state
-    Write-Host "Portal HTTPS: https://$($created.Distribution.DomainName)/"
-    Write-Host 'CloudFront se está propagando; normalmente tarda varios minutos.'
+    Complete-Distribution $state $created.Distribution
 }
 
 function Delete-Distribution {

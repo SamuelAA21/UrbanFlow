@@ -11,7 +11,7 @@ aws sts get-caller-identity
 .\urbanflow.ps1 portal -Meses 2025-06 -HorasMaximas 4
 ```
 
-El comando crea o reutiliza el clúster etiquetado `urbanflow-portal`, instala el portal y encola la preparación. La URL de movilidad aparece en la terminal. Por defecto solo puede abrirla la IP pública desde la que desplegaste. Para abrirla desde otro punto autorizado, pasa el CIDR IPv4 con `-PortalCidr`. Puedes repetir el comando para agregar otro CIDR al grupo de seguridad del clúster.
+El comando crea o reutiliza el clúster etiquetado `urbanflow-portal`, instala el portal y encola la preparación. La URL HTTPS de movilidad aparece en la terminal y puede abrirse desde cualquier navegador. El puerto del servidor de origen deja de aceptar conexiones directas cuando CloudFront supera la comprobación de salud.
 
 El portal de movilidad usa HTTPS mediante el dominio temporal `*.cloudfront.net` asignado por AWS y expone datos públicos de lectura. CloudFront desactiva la caché para que la API siempre consulte la publicación vigente y añade encabezados de seguridad. El portal de operación va por un túnel SSH. Abre una segunda terminal y mantén ese comando en ejecución.
 
