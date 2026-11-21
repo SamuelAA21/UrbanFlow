@@ -54,7 +54,8 @@ function Deploy-Portal {
         } catch {
             if ($_.Exception.Message -notmatch 'InvalidPermission.Duplicate') { throw }
         }
-        Write-Host "Portal de movilidad: http://$((Get-MasterInfo).PublicIpAddress):8080/"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Raiz 'scripts\cloudfront-portal.ps1') deploy -Region $Region
+        if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear la entrada HTTPS de CloudFront.' }
         Write-Host 'La preparación corre en AWS. Usa .\urbanflow.ps1 admin para seguirla.'
     } catch {
         if (-not $alreadyActive -and (Test-Path (State-Path))) {

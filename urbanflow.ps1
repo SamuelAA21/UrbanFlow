@@ -236,10 +236,19 @@ function Start-Dashboard {
 
 function Show-State {
     Test-Login
-    if (Test-Path (State-Path)) { Run-Motor 'estado' } else { Write-Host 'No hay clúster desplegado.' }
+    if (Test-Path (State-Path)) {
+        Run-Motor 'estado'
+        $state = Read-State
+        if ($state.CloudFrontDomain) { Write-Host "Portal HTTPS: https://$($state.CloudFrontDomain)/" -ForegroundColor Green }
+    } else { Write-Host 'No hay clúster desplegado.' }
 }
 function Remove-All {
     Test-Login
+    $edgeScript = Join-Path $Raiz 'scripts\cloudfront-portal.ps1'
+    if (Test-Path (State-Path) -and (Test-Path $edgeScript)) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $edgeScript delete -Region $Region
+        if ($LASTEXITCODE -ne 0) { throw 'No se pudo retirar CloudFront; se detiene la limpieza para no dejar un recurso huérfano.' }
+    }
     if (Test-Path (State-Path)) { Run-Motor 'eliminar' }
     else { Write-Host 'No hay estado local; se verifica en AWS por etiquetas.'; Run-Motor 'eliminar' }
     Write-Host 'Los resultados locales se conservan en la carpeta resultados\ para el dashboard.' -ForegroundColor Green

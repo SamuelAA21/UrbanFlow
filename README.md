@@ -13,7 +13,7 @@ aws sts get-caller-identity
 
 El comando crea o reutiliza el clúster etiquetado `urbanflow-portal`, instala el portal y encola la preparación. La URL de movilidad aparece en la terminal. Por defecto solo puede abrirla la IP pública desde la que desplegaste. Para abrirla desde otro punto autorizado, pasa el CIDR IPv4 con `-PortalCidr`. Puedes repetir el comando para agregar otro CIDR al grupo de seguridad del clúster.
 
-El portal de movilidad usa HTTP durante el despliegue temporal y expone datos públicos de lectura. El portal de operación va por un túnel SSH. Abre una segunda terminal y mantén ese comando en ejecución.
+El portal de movilidad usa HTTPS mediante el dominio temporal `*.cloudfront.net` asignado por AWS y expone datos públicos de lectura. CloudFront desactiva la caché para que la API siempre consulte la publicación vigente y añade encabezados de seguridad. El portal de operación va por un túnel SSH. Abre una segunda terminal y mantén ese comando en ejecución.
 
 ```powershell
 .\urbanflow.ps1 admin
@@ -21,7 +21,7 @@ El portal de movilidad usa HTTP durante el despliegue temporal y expone datos p�
 
 Abre [Operación de UrbanFlow](http://127.0.0.1:8090). Sigue las etapas de ingesta, limpieza, perfil, MLlib y Spark SQL. Tras la publicación, filtra el portal de movilidad y prueba **Recalcular corredores** desde operación. El portal muestra el mes y el ID de trabajo de la última publicación. Los primeros resultados requieren que termine la preparación en AWS.
 
-Después de la exposición, elimina el clúster y verifica el mensaje de limpieza.
+Después de la exposición, elimina CloudFront y el clúster y verifica el mensaje de limpieza.
 
 ```powershell
 .\urbanflow.ps1 eliminar
