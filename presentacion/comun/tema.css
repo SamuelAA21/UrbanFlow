@@ -1,0 +1,235 @@
+/* Kit HTML — Cerebro Presentaciones
+   Sistema visual "plano de sistemas". Ver 03 - Recursos visuales/Diseno visual y animacion.md */
+
+:root {
+  --tinta: #0F1B2D;
+  --superficie: #16263D;
+  --superficie-2: #1C2F4A;
+  --trazo: #2A3E5C;
+  --papel: #F7F9FC;
+  --papel-2: #EDF1F7;
+  --regla: #D8E0EC;
+  --foco: #7CC4FF;
+
+  --c-arranque: #F2C14E;
+  --c-vista: #4C8DFF;
+  --c-control: #9B7BFF;
+  --c-dominio: #2FBF8F;
+  --c-datos: #F08A3C;
+  --c-plataforma: #8EA0B8;
+  --c-pruebas: #E86A9A;
+
+  --f-titulo: Bahnschrift, "DIN Alternate", Barlow, "Segoe UI Variable Display", system-ui, sans-serif;
+  --f-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-lectura: "Sitka Text", Georgia, "Times New Roman", serif;
+  --f-codigo: "Cascadia Code", "Cascadia Mono", ui-monospace, Consolas, monospace;
+
+  --curva: cubic-bezier(.2, .7, .2, 1);
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 16px;
+}
+
+/* Temas: tinta (oscuro) y papel (claro) */
+.tema-tinta {
+  --fondo: var(--tinta);
+  --panel: var(--superficie);
+  --panel-2: var(--superficie-2);
+  --linea: var(--trazo);
+  --t1: #E6EDF7;
+  --t2: #A9B8CF;
+  --t3: #7C8DA8;
+  --rejilla: rgba(124, 196, 255, .055);
+  --sombra: 0 18px 40px -18px rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+.tema-papel {
+  /* Colores de capa para fondo claro: mismo tono y significado, con contraste ≥ 4,5:1 sobre papel */
+  --c-arranque: #8A5A00;
+  --c-vista: #1F5FD6;
+  --c-control: #5B3FC4;
+  --c-dominio: #137A55;
+  --c-datos: #B35310;
+  --c-plataforma: #4A5568;
+  --c-pruebas: #B23A6B;
+  --fondo: var(--papel);
+  --panel: #FFFFFF;
+  --panel-2: var(--papel-2);
+  --linea: var(--regla);
+  --t1: #14213D;
+  --t2: #45556E;
+  --t3: #6B7A92;
+  --rejilla: rgba(20, 33, 61, .05);
+  --sombra: 0 14px 34px -20px rgba(20, 33, 61, .35);
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--fondo);
+  color: var(--t1);
+  font: 15px/1.5 var(--f-ui);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { font-family: var(--f-titulo); font-weight: 600; letter-spacing: -.01em; line-height: 1.15; margin: 0; }
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+code, .codigo { font-family: var(--f-codigo); font-size: .86em; }
+
+/* Color por capa: cualquier elemento con data-capa recibe --c */
+[data-capa="arranque"] { --c: var(--c-arranque); }
+[data-capa="vista"] { --c: var(--c-vista); }
+[data-capa="control"] { --c: var(--c-control); }
+[data-capa="dominio"] { --c: var(--c-dominio); }
+[data-capa="datos"] { --c: var(--c-datos); }
+[data-capa="plataforma"] { --c: var(--c-plataforma); }
+[data-capa="pruebas"] { --c: var(--c-pruebas); }
+
+/* Chip de módulo: punto de color de su capa + nombre */
+.chip {
+  display: inline-flex; align-items: center; gap: .45em;
+  padding: .18em .6em .2em .5em; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c, var(--t3)) 45%, transparent);
+  background: color-mix(in srgb, var(--c, var(--t3)) 12%, transparent);
+  color: var(--t1); font-size: .86em; line-height: 1.35; white-space: nowrap;
+  cursor: pointer; text-decoration: none;
+}
+.chip::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: var(--c, var(--t3)); flex: none; }
+.chip:hover { background: color-mix(in srgb, var(--c, var(--t3)) 22%, transparent); }
+.chip.sin-punto::before { display: none; }
+
+.boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4em;
+  height: 34px; padding: 0 .9em; border-radius: var(--r-s);
+  border: 1px solid var(--linea); background: var(--panel-2); cursor: pointer;
+}
+.boton:hover { border-color: color-mix(in srgb, var(--foco) 60%, var(--linea)); }
+.boton.principal { background: var(--foco); color: #0B1A2C; border-color: transparent; font-weight: 600; }
+.boton svg { width: 16px; height: 16px; }
+
+.campo {
+  height: 38px; padding: 0 .8em; border-radius: var(--r-m);
+  border: 1px solid var(--linea); background: var(--panel); color: var(--t1);
+}
+.campo::placeholder { color: var(--t3); }
+
+.tabla { width: 100%; border-collapse: collapse; font-size: .92em; }
+.tabla th { text-align: left; font-weight: 600; color: var(--t2); font-family: var(--f-titulo); letter-spacing: .01em; }
+.tabla th, .tabla td { padding: .6em .7em; border-bottom: 1px solid var(--linea); vertical-align: top; }
+.tabla tr:last-child td { border-bottom: 0; }
+
+.ref { font-family: var(--f-codigo); font-size: .78em; color: var(--t3); word-break: break-all; }
+.tenue { color: var(--t2); }
+.muy-tenue { color: var(--t3); }
+
+/* Mapa SVG compartido (explorador, documento y presentación) */
+.mapa { display: block; width: 100%; height: 100%; user-select: none; }
+.mapa .territorio { fill: color-mix(in srgb, var(--c) 6%, transparent); stroke: color-mix(in srgb, var(--c) 22%, transparent); stroke-dasharray: 3 5; }
+.mapa .capa-titulo { font: 600 13px var(--f-titulo); letter-spacing: .02em; fill: var(--c); }
+.mapa .nodo { cursor: pointer; transition: opacity .2s var(--curva); }
+.mapa .nodo .caja { fill: var(--panel); stroke: var(--linea); stroke-width: 1; transition: stroke .2s var(--curva); }
+.mapa .nodo .riel { fill: var(--c); }
+.mapa .nodo .nombre { font: 600 13.5px var(--f-titulo); fill: var(--t1); }
+.mapa .nodo .sub { font: 10.5px var(--f-codigo); fill: var(--t3); }
+.mapa .nodo.generado .caja { stroke-dasharray: 4 3; fill: transparent; }
+.mapa .nodo:hover .caja { stroke: var(--c); }
+.mapa .nodo.sel .caja { stroke: var(--c); stroke-width: 2; }
+.mapa .nodo.activo .caja { stroke: var(--c); stroke-width: 2.5; }
+.mapa .arista { fill: none; stroke: var(--c); stroke-opacity: .42; stroke-width: 1.4; transition: stroke-opacity .2s var(--curva), stroke-width .2s var(--curva); }
+.mapa .arista.tenue-rel { stroke-opacity: .22; stroke-width: 1; }
+.mapa .arista.on { stroke-opacity: 1; stroke-width: 2.2; }
+.mapa .arista.activa { stroke-opacity: 1; stroke-width: 3; }
+.mapa .atenuado { opacity: .12; }
+.mapa .paquete { fill: #fff; filter: drop-shadow(0 0 6px var(--c)); }
+.mapa .pulso { fill: none; stroke: var(--c); stroke-width: 2; }
+.mapa .etiqueta-arista { font: 11px var(--f-ui); fill: var(--t1); paint-order: stroke; stroke: var(--fondo); stroke-width: 4px; stroke-linejoin: round; }
+
+/* Mapa en modo grande (presentaciones): texto legible proyectado */
+.mapa.grande .nodo .nombre { font-size: 21px; }
+.mapa.grande .nodo .sub { font-size: 14px; }
+.mapa.grande .capa-titulo { font-size: 22px; }
+.mapa.grande .arista { stroke-width: 2; }
+.mapa.grande .arista.on { stroke-width: 3; }
+.mapa.grande .arista.activa { stroke-width: 4.5; }
+.mapa.grande .nodo .riel { width: 5px; }
+
+/* ---------- v2: coreografía (movimiento.js) ----------
+   Mientras una escena controla el mapa, GSAP es el único dueño de opacidades y trazos: sin transiciones CSS. */
+.mapa.coreografia .nodo, .mapa.coreografia .arista, .mapa.coreografia .columna { transition: none; }
+.coreo-pulso { fill: none; stroke: var(--c); stroke-width: 2; }
+.coreo-paquete .paquete { fill: #fff; filter: drop-shadow(0 0 6px var(--c)); }
+.paquete-dato { font: 600 12.5px var(--f-codigo); fill: var(--t1); }
+.paquete-pildora { fill: var(--panel); stroke: var(--c); stroke-width: 1.4; }
+.coreo-activo { fill: none; stroke: var(--c); stroke-width: 3; }
+.coreo-negacion-linea { fill: none; stroke: #FF8A8A; stroke-width: 2.5; stroke-dasharray: 10 8; }
+.coreo-negacion-fondo { fill: var(--fondo); stroke: #FF8A8A; stroke-width: 2; }
+.coreo-negacion-x { font: 700 26px var(--f-titulo); fill: #FF8A8A; }
+.coreo-negacion-texto { font: 600 16px var(--f-ui); fill: #FFC2C2; paint-order: stroke; stroke: var(--fondo); stroke-width: 5px; stroke-linejoin: round; }
+.mapa.grande .coreo-negacion-x { font-size: 34px; }
+.mapa.grande .coreo-negacion-texto { font-size: 22px; }
+.mapa.grande .coreo-activo { stroke-width: 4; }
+.mapa.sin-rutas .nodo .sub { display: none; }
+.mapa.sin-rutas .nodo .nombre { transform: translateY(8px); }
+.mapa.grande.completo .nodo .nombre { font-size: 18.5px; }
+.coreo-conector { fill: none; stroke: var(--c); stroke-width: 1.6; }
+.coreo-panel-fondo { fill: var(--panel); stroke: var(--c); stroke-width: 1.6; filter: drop-shadow(0 14px 24px rgba(0, 0, 0, .35)); }
+.coreo-panel-titulo { font: 600 15px var(--f-titulo); fill: var(--c); }
+.coreo-panel-item { font: 13.5px var(--f-ui); fill: var(--t1); }
+.coreo-panel-item.codigo { font-family: var(--f-codigo); font-size: 12.5px; }
+.coreo-nota-fondo { fill: color-mix(in srgb, var(--c) 16%, var(--fondo)); stroke: var(--c); stroke-width: 1.2; }
+.coreo-nota-texto { font: 600 14px var(--f-ui); fill: var(--t1); }
+.mapa.grande .paquete-dato { font-size: 19px; }
+.mapa.grande .coreo-panel-titulo { font-size: 21px; }
+.mapa.grande .coreo-panel-item { font-size: 18.5px; }
+.mapa.grande .coreo-panel-item.codigo { font-size: 17px; }
+.mapa.grande .coreo-nota-texto { font-size: 18.5px; }
+
+/* Lienzo libre: bifurcación de reglas y transformación de datos */
+svg.libre { overflow: visible; }
+.bif-raiz-fondo { fill: var(--panel); stroke: var(--t3); stroke-width: 2; }
+.bif-raiz-titulo { font: 600 34px var(--f-titulo); fill: var(--t1); }
+.bif-raiz-texto { font: 25px var(--f-ui); fill: var(--t2); }
+.bif-rama { fill: none; stroke: var(--trazo); stroke-width: 3; }
+.bif-condicion { font: 600 26px var(--f-codigo); fill: var(--t1); }
+.bif-res-fondo { fill: color-mix(in srgb, var(--c) 9%, var(--fondo)); stroke: color-mix(in srgb, var(--c) 60%, transparent); stroke-width: 1.6; }
+.bif-caso.rechaza .bif-res-fondo { stroke-dasharray: 7 5; }
+.bif-marca { font: 700 30px var(--f-titulo); }
+.bif-caso.acepta .bif-marca { fill: var(--c-dominio); }
+.bif-caso.rechaza .bif-marca { fill: var(--c-pruebas); }
+.bif-resultado { font: 27px var(--f-ui); fill: var(--t1); }
+.bif-quien { font: 600 20px var(--f-titulo); fill: var(--c); }
+.tr-fondo { fill: var(--panel); stroke: var(--c, var(--trazo)); stroke-width: 2; }
+.tr-titulo { font: 600 32px var(--f-titulo); fill: var(--c, var(--t1)); }
+.tr-como-metodo { font: 600 30px var(--f-codigo); fill: var(--t1); }
+.tr-linea { font: 24px var(--f-codigo); fill: var(--t1); }
+.tr-linea.cambiada { fill: var(--t1); font-weight: 600; }
+.tr-cambio { fill: color-mix(in srgb, var(--acento, var(--c-arranque)) 22%, transparent); }
+.tr-flecha { fill: none; stroke: var(--t3); stroke-width: 3; marker-end: none; }
+.tr-como-texto { font: 21px var(--f-ui); fill: var(--t2); }
+.tr-ilustrativo { font: 21px var(--f-ui); fill: var(--t3); }
+
+/* ---------- v2: dirección artística ----------
+   El registro se elige por proyecto en guion.js (direccion.registro). Las capas, la tipografía base y los tipos
+   de relación NO cambian: son la identidad común. Cambian la atmósfera, la densidad y el acento. */
+:root { --acento: var(--foco); }
+[data-registro="editorial"] { --rejilla: transparent; }
+[data-registro="editorial"] .diapo h2, [data-registro="editorial"] .portada h1 { font-family: var(--f-lectura); font-weight: 600; letter-spacing: -.015em; }
+[data-registro="consola"] { --rejilla: rgba(124, 255, 196, .05); }
+[data-registro="consola"] .diapo h2, [data-registro="consola"] .vista h2 { font-family: var(--f-codigo); font-weight: 600; letter-spacing: -.02em; }
+
+/* Diagrama de secuencia */
+.secuencia { display: block; width: 100%; height: auto; }
+.secuencia .sq-vida { stroke: var(--c); stroke-opacity: .45; stroke-dasharray: 3 5; }
+.secuencia .sq-caja { fill: var(--panel); stroke: color-mix(in srgb, var(--c) 55%, var(--linea)); }
+.secuencia .riel { fill: var(--c); }
+.secuencia .sq-nombre { font: 600 14px var(--f-titulo); fill: var(--t1); }
+.secuencia .sq-flecha { fill: none; stroke: var(--c); stroke-width: 1.6; }
+.secuencia .sq-num { fill: var(--c); }
+.secuencia .sq-num-t { font: 700 10.5px var(--f-titulo); fill: #0B1A2C; }
+.secuencia .sq-accion { font: 13.5px var(--f-ui); fill: var(--t1); paint-order: stroke; stroke: var(--fondo); stroke-width: 4px; stroke-linejoin: round; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+}

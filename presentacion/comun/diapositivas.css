@@ -1,0 +1,78 @@
+/* Kit HTML — motor de diapositivas. Requiere tema.css (tema-tinta). */
+html, body.presentacion { height: 100%; margin: 0; overflow: hidden; background: #08111E; }
+body.presentacion { font: 30px/1.45 var(--f-ui); }
+
+.escenario { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: center center; }
+.diapo {
+  position: absolute; inset: 0; padding: 104px 136px 96px; display: flex; flex-direction: column;
+  background-color: var(--tinta);
+  background-image: linear-gradient(var(--rejilla) 1px, transparent 1px), linear-gradient(90deg, var(--rejilla) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0; visibility: hidden; transform: translateX(36px);
+  transition: opacity .5s var(--curva), transform .5s var(--curva), visibility 0s linear .5s;
+  overflow: hidden;
+}
+.diapo.actual { opacity: 1; visibility: visible; transform: none; transition: opacity .5s var(--curva), transform .5s var(--curva), visibility 0s; }
+.diapo.pasada { transform: translateX(-36px); }
+
+/* Tipografía del lienzo */
+.diapo h1 { font: 700 156px/0.92 var(--f-titulo); letter-spacing: -.04em; margin: 0; }
+.diapo h2 { font: 600 76px/1.02 var(--f-titulo); letter-spacing: -.025em; margin: 0 0 28px; max-width: 1500px; }
+.diapo .bajada { font-size: 36px; line-height: 1.4; color: var(--t2); max-width: 1300px; margin: 0; }
+.diapo p { margin: 0; }
+.diapo .pie-diapo { position: absolute; left: 136px; right: 136px; bottom: 40px; display: flex; justify-content: space-between; font: 500 20px var(--f-titulo); color: var(--t3); }
+.diapo code { font-size: .9em; color: var(--t1); }
+.notas { display: none; }
+
+/* Aparición por pasos */
+[data-paso] { opacity: 0; transform: translateY(20px); transition: opacity .45s var(--curva), transform .45s var(--curva); }
+[data-paso][data-anim="izq"] { transform: translateX(-34px); }
+[data-paso][data-anim="escala"] { transform: scale(.94); }
+[data-paso][data-anim="nada"] { transform: none; }
+[data-paso].visto { opacity: 1; transform: none; }
+[data-paso].atenuar-luego.superado { opacity: .32; }
+
+/* v2: densidad (direccion.densidad en guion.js) y acento del proyecto */
+body[data-densidad="baja"] .diapo h2 { font-size: 84px; }
+body[data-densidad="baja"] .diapo .bajada { font-size: 40px; }
+body[data-densidad="alta"] .diapo h2 { font-size: 64px; }
+body[data-densidad="alta"] .diapo { padding: 84px 110px 80px; }
+.leyenda-paso { border-left-color: var(--acento) !important; transition: none; }
+/* Altura fija: cambiar de leyenda no debe redimensionar el lienzo (el mapa no "salta" entre pasos) */
+.diapo .leyenda-paso { height: 150px; min-height: 0; flex: none; overflow: hidden; }
+.diapo h2 { text-wrap: balance; }
+/* Un solo indicador visible para el público (el del pie); el detalle de pasos va en las notas (N) */
+.contador { display: none; }
+.estado-movimiento { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); font: 600 14px var(--f-titulo); color: var(--t1); background: rgba(8, 17, 30, .85); border: 1px solid var(--trazo); border-radius: 999px; padding: 4px 14px; z-index: 6; display: none; }
+.estado-movimiento.on { display: block; }
+
+/* Barra de progreso y contador */
+.progreso { position: fixed; left: 0; bottom: 0; height: 3px; background: var(--acento); transition: width .4s var(--curva); z-index: 5; }
+.contador { position: fixed; right: 16px; bottom: 10px; font: 13px var(--f-codigo); color: var(--t3); z-index: 5; }
+
+/* Notas del orador */
+.panel-notas { position: fixed; left: 0; right: 0; bottom: 0; max-height: 38vh; overflow-y: auto; z-index: 10; background: rgba(8, 17, 30, .96); border-top: 1px solid var(--trazo); padding: 18px 28px 26px; font: 19px/1.55 var(--f-ui); color: var(--t1); display: none; }
+.panel-notas.on { display: block; }
+.panel-notas .siguiente { color: var(--t3); font-size: 15px; margin-top: 10px; }
+
+/* Vista general */
+.vista-general { position: fixed; inset: 0; z-index: 20; background: rgba(8, 17, 30, .97); display: none; padding: 40px; overflow-y: auto; }
+.vista-general.on { display: block; }
+.vista-general ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.vista-general button { width: 100%; text-align: left; padding: 16px; border-radius: 12px; border: 1px solid var(--trazo); background: var(--superficie); color: var(--t1); cursor: pointer; font: 600 17px var(--f-titulo); min-height: 96px; }
+.vista-general button span { display: block; color: var(--t3); font: 13px var(--f-codigo); margin-bottom: 6px; }
+.vista-general button.actual { border-color: var(--foco); }
+
+.ayuda { position: fixed; left: 16px; bottom: 10px; font: 13px var(--f-ui); color: var(--t3); z-index: 5; transition: opacity 1s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .diapo, .diapo.actual, [data-paso] { transition: none !important; }
+}
+@media print {
+  html, body.presentacion { overflow: visible; height: auto; background: none; }
+  .escenario { position: static; transform: none !important; width: auto; height: auto; }
+  .diapo { position: relative; width: 1920px; height: 1080px; opacity: 1; visibility: visible; transform: none; break-after: page; }
+  [data-paso] { opacity: 1; transform: none; }
+  .progreso, .contador, .panel-notas, .vista-general, .ayuda { display: none !important; }
+  @page { size: 1920px 1080px; margin: 0; }
+}

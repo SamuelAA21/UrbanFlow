@@ -1,0 +1,21 @@
+# Local AWS state and generated outputs
+/estado/
+/resultados/
+/logs/
+/runtime/
+/presentacion/datos.js
+/.codex-*/
+/.chart-data-*/
+.env
+.env.*
+.aws/
+*.pem
+*.key
+*.pfx
+*.pub
+*.sqlite*
+*.tgz
+*.zip
+__pycache__/
+.venv/
+.pytest_cache/

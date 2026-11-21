@@ -1,0 +1,17 @@
+name: Comprobar UrbanFlow
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - run: python -m pip install -r portal/requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m compileall -q spark portal
+      - run: for file in cluster/*.sh; do bash -n "$file" || exit 1; done
+      - run: for file in portal/web/assets/*.js; do node --input-type=module --check < "$file" || exit 1; done

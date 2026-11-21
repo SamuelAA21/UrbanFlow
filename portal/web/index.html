@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UrbanFlow | Movilidad de Nueva York</title><link rel="stylesheet" href="/assets/style.css">
+<script type="module" src="/assets/mobility.js"></script></head>
+<body><header><div class="brand">Urban<span>Flow</span></div><div>Nueva York / Taxis amarillos</div></header>
+<main><section class="intro"><h1>¿Dónde empieza el turno?</h1><p>Compara recogidas históricas por zona y revisa las estimaciones del modelo.</p><p id="release" class="muted" role="status">Consultando datos publicados…</p></section>
+<form id="filters" class="toolbar" aria-label="Filtros de movilidad">
+<label>Día de la semana<select id="weekday"><option value="2">Lunes</option><option value="3">Martes</option><option value="4">Miércoles</option><option value="5">Jueves</option><option value="6" selected>Viernes</option><option value="7">Sábado</option><option value="1">Domingo</option></select></label>
+<label>Hora<select id="hour"></select></label><label>Zona<select id="zone"></select></label>
+</form>
+<p id="notice" role="status"></p>
+<div class="map-layout"><section class="map"><canvas id="map" role="img" aria-label="Mapa de recogidas promedio por zona. Usa la tabla para consultar los valores."></canvas><span class="legend">Menos <i></i> Más recogidas</span></section>
+<section class="ranking"><h2>Zonas con más recogidas</h2><table><thead><tr><th scope="col">Zona</th><th scope="col">Promedio</th></tr></thead><tbody id="ranking"></tbody></table></section></div>
+<section class="section"><h2 id="zone-title">Perfil por hora</h2><div id="histogram" class="histogram"></div></section>
+<section class="section"><div class="section-head"><div><h2>Estimación frente a viajes observados</h2><p id="model-note" class="muted"></p></div><label>Fecha de evaluación o pronóstico<input type="date" id="day"></label></div>
+<div class="scroll"><table><thead><tr><th>Hora</th><th>Observados</th><th>Estimación MLlib</th><th>Promedio del modelo base</th></tr></thead><tbody id="prediction"></tbody></table></div></section>
+<section class="section"><h2>Corredores más utilizados</h2><p class="muted" id="corridor-release"></p><div class="scroll"><table><thead><tr><th>Origen</th><th>Destino</th><th>Viajes</th><th>Minutos promedio</th></tr></thead><tbody id="corridors"></tbody></table></div></section>
+</main><footer>Fuente NYC Taxi &amp; Limousine Commission. Horas locales de Nueva York.</footer></body></html>
