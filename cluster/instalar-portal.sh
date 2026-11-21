@@ -20,8 +20,9 @@ install -d -o hadoop -g hadoop "$app" "$app/spark"
 install -o hadoop -g hadoop -m 755 "$source_dir/cluster/pipeline.sh" "$app/pipeline.sh"
 install -o hadoop -g hadoop -m 644 "$source_dir"/spark/*.py "$app/spark/"
 environment="URBANFLOW_RUNTIME=$runtime"
+yarn_environment="URBANFLOW_YARN=http://10.78.1.10:8088"
 cd "$web"
-sudo -u hadoop env "$environment" bash -c 'umask 027; exec "$@"' bash \
+sudo -u hadoop env "$environment" "$yarn_environment" bash -c 'umask 027; exec "$@"' bash \
   "$web/venv/bin/python" -m portal.bootstrap --prepare "$months"
 
 make_unit() {
@@ -36,6 +37,7 @@ Wants=network-online.target
 User=$user
 WorkingDirectory=$web
 Environment=$environment
+Environment=$yarn_environment
 Environment=$home
 ExecStart=$command
 Restart=on-failure
@@ -57,10 +59,12 @@ make_unit admin hadoop "$python -m uvicorn portal.app:app --host 127.0.0.1 --por
   "URBANFLOW_ADMIN=1" ""
 make_unit worker hadoop "$python -m portal.worker" "URBANFLOW_HOME=$app" ""
 systemctl daemon-reload
-for unit in public admin worker; do
+for unit in public admin; do
   systemctl enable "urbanflow-$unit.service"
-  systemctl is-active --quiet "urbanflow-$unit.service" || systemctl start "urbanflow-$unit.service"
+  systemctl restart "urbanflow-$unit.service"
 done
+systemctl enable "urbanflow-worker.service"
+systemctl is-active --quiet "urbanflow-worker.service" || systemctl start "urbanflow-worker.service"
 curl --fail --silent --show-error --retry 8 --retry-connrefused http://127.0.0.1:8080/health
 curl --fail --silent --show-error --retry 8 --retry-connrefused http://127.0.0.1:8090/health
 echo
