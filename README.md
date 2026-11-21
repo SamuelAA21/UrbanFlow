@@ -2,6 +2,10 @@
 
 Portal de movilidad para explorar recogidas históricas de taxis amarillos en Nueva York y evaluar estimaciones generadas con Spark MLlib. El portal privado muestra el estado de los workers y ejecuta cálculos de corredores por mes en YARN.
 
+## Lanzador gráfico en Windows
+
+Haz doble clic en `UrbanFlow.cmd`. El lanzador permite iniciar sesión en AWS, desplegar uno o seis meses, abrir los paneles, consultar el estado, respaldar SQLite y eliminar los recursos sin escribir comandos. Las acciones de AWS abren una consola visible para mostrar su progreso y sus errores.
+
 ## Despliegue temporal en AWS
 
 Desde Windows, abre PowerShell en la raíz del repositorio. Necesitas AWS CLI con sesión activa, OpenSSH, tar y permisos para operar el clúster EC2 en la región elegida. El clúster usa cuatro instancias y discos. Se factura conforme a tu cuenta y región.
