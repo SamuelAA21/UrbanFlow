@@ -86,6 +86,25 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(body(application.metadata(request()))["releases"]["corridors"]["job_id"], 1)
         self.assertEqual(body(application.corridors(request()))[0]["trips"], 42)
 
+    def test_prepare_publication_includes_hdfs_input_size(self):
+        folder = Path(self.folder.name)
+        (folder / "perfil.csv").write_text(
+            "zona_origen,dia_semana,hora,viajes,dias\n132,6,18,25,2\n", encoding="utf-8")
+        (folder / "predicciones_prueba.csv").write_text(
+            "fecha,zona_origen,hora,viajes,pred_modelo,pred_perfil\n2025-06-17,132,18,10,9.5,8\n", encoding="utf-8")
+        (folder / "prediccion_manana.csv").write_text(
+            "fecha,zona_origen,hora,viajes_esperados\n2025-07-01,132,18,11\n", encoding="utf-8")
+        (folder / "sql_corredores.csv").write_text(
+            "origen,destino,viajes,duracion_media_min\nJFK,Queens,23,12\n", encoding="utf-8")
+        (folder / "etl_resumen.json").write_text('{"meses":["2025-06"]}', encoding="utf-8")
+        (folder / "metricas_modelo.json").write_text('{"mejor_modelo":"Random Forest"}', encoding="utf-8")
+        (folder / "bytes_crudos.txt").write_text("73542954\n", encoding="utf-8")
+        with db.connect() as conn:
+            db.publish(conn, {"id": 1, "kind": "prepare", "months": "2025-06"}, folder)
+            details = json.loads(conn.execute("SELECT details FROM releases WHERE name='mobility'").fetchone()[0])
+        self.assertEqual(details["etl_resumen"]["bytes_crudos"], 73542954)
+        self.assertEqual(details["etl_resumen"]["bytes_hdfs_replicados"], 220628862)
+
 
 if __name__ == "__main__":
     unittest.main()

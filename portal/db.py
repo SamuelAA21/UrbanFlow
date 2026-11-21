@@ -88,6 +88,11 @@ def publish(conn, job, folder):
                               for r in csv.DictReader(source)))
         metadata = {name: json.loads((folder / (name + ".json")).read_text(encoding="utf-8"))
                     for name in ("etl_resumen", "metricas_modelo")}
+        size_file = folder / "bytes_crudos.txt"
+        if size_file.exists():
+            input_bytes = int(size_file.read_text(encoding="utf-8").strip())
+            metadata["etl_resumen"]["bytes_crudos"] = input_bytes
+            metadata["etl_resumen"]["bytes_hdfs_replicados"] = input_bytes * 3
         release(conn, "mobility", job["id"], metadata)
     replace_csv(conn, "corridors", "INSERT INTO corridors VALUES (?,?,?,?)",
                 folder / "sql_corredores.csv",

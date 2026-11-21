@@ -1,10 +1,88 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UrbanFlow | Operación</title><link rel="stylesheet" href="/assets/style.css"><script type="module" src="/assets/admin.js"></script></head>
-<body class="operations"><header><div class="brand">Urban<span>Flow</span></div><div>Operación del clúster</div></header><main>
-<section class="intro"><h1>Estado del procesamiento</h1><p id="notice" role="status">Consultando el backend…</p></section>
-<form class="toolbar" id="run"><label>Mes publicado<select id="month" required></select></label><button id="submit" disabled>Recalcular corredores</button></form>
-<p id="message" role="status"></p>
-<section class="section"><h2>Trabajos de UrbanFlow</h2><div id="jobs"></div></section>
-<section class="section"><h2>Workers de YARN</h2><p class="muted">Recursos asignados a contenedores por YARN.</p><div class="scroll"><table><thead><tr><th>Nodo</th><th>Estado</th><th>Contenedores</th><th>Memoria asignada</th><th>vCores asignados</th></tr></thead><tbody id="nodes"></tbody></table></div></section>
-<section class="section"><h2>Aplicaciones de YARN</h2><div class="scroll"><table><thead><tr><th>Aplicación</th><th>Estado</th><th>Progreso</th><th>Duración</th></tr></thead><tbody id="apps"></tbody></table></div></section>
-</main></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UrbanFlow | Operación</title>
+  <link rel="stylesheet" href="/assets/style.css?v=4">
+  <script type="module" src="/assets/admin.js?v=4"></script>
+</head>
+<body class="operations">
+  <header><div class="brand">Urban<span>Flow</span></div><div class="header-context">Centro de operación</div></header>
+  <main>
+    <section class="intro operations-intro">
+      <p class="context-line">Ejecución distribuida en AWS</p>
+      <h1>Qué procesó UrbanFlow y cómo respondió el clúster.</h1>
+      <p id="notice" class="release" role="status">Consultando backend, modelo y YARN…</p>
+    </section>
+
+    <section class="ops-overview" aria-labelledby="data-title">
+      <div class="ops-heading">
+        <div><p class="section-label">Datos procesados</p><h2 id="data-title">Alcance de la publicación</h2></div>
+        <p id="data-period" class="muted">Esperando metadatos…</p>
+      </div>
+      <div class="ops-ledger">
+        <div class="ledger-primary"><span>Entrada Parquet</span><strong id="input-size">—</strong><small id="replicated-size">Tamaño lógico en HDFS</small></div>
+        <dl>
+          <div><dt>Registros leídos</dt><dd id="raw-records">—</dd></div>
+          <div><dt>Registros válidos</dt><dd id="valid-records">—</dd></div>
+          <div><dt>Descartados por calidad</dt><dd id="discarded-records">—</dd></div>
+          <div><dt>Zonas × hora generadas</dt><dd id="zone-hour-rows">—</dd></div>
+        </dl>
+      </div>
+      <div class="quality-track" aria-label="Porcentaje de registros válidos"><i id="quality-fill"></i></div>
+      <p id="quality-note" class="muted"></p>
+    </section>
+
+    <section class="section model-section" aria-labelledby="model-title">
+      <div class="ops-heading">
+        <div><p class="section-label">Machine learning</p><h2 id="model-title">Modelo publicado</h2></div>
+        <p id="model-period" class="muted"></p>
+      </div>
+      <div class="model-layout">
+        <div class="model-verdict">
+          <p class="brief-label">Modelo elegido</p>
+          <h3 id="model-name">—</h3>
+          <div class="model-score"><strong id="model-r2">—</strong><span>R²: variación explicada</span></div>
+          <dl class="model-facts">
+            <div><dt>Error absoluto medio</dt><dd id="model-mae">—</dd></div>
+            <div><dt>Error cuadrático medio</dt><dd id="model-rmse">—</dd></div>
+            <div><dt>Filas de entrenamiento</dt><dd id="training-rows">—</dd></div>
+            <div><dt>Tiempo de entrenamiento</dt><dd id="training-time">—</dd></div>
+          </dl>
+          <p id="model-reading" class="interpretation"></p>
+        </div>
+        <div class="model-detail">
+          <h3>Comparación de candidatos</h3>
+          <p class="muted">Menor MAE/RMSE y mayor R² indican mejor desempeño.</p>
+          <div class="scroll"><table><thead><tr><th>Modelo</th><th>MAE</th><th>RMSE</th><th>R²</th></tr></thead><tbody id="models"></tbody></table></div>
+          <h3 class="variables-title">Variables utilizadas</h3>
+          <div id="variables" class="variable-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section action-section" aria-labelledby="action-title">
+      <div>
+        <p class="section-label">Acción operativa</p>
+        <h2 id="action-title">Actualizar corredores</h2>
+        <p class="muted">Ejecuta únicamente Spark SQL para el mes elegido. No repite ETL ni vuelve a entrenar el modelo.</p>
+      </div>
+      <form class="action-form" id="run"><label>Mes publicado<select id="month" required></select></label><button id="submit" disabled>Recalcular corredores</button></form>
+    </section>
+    <p id="message" role="status"></p>
+
+    <section class="section" aria-labelledby="jobs-title"><div class="ops-heading"><div><p class="section-label">Cola y auditoría</p><h2 id="jobs-title">Trabajos de UrbanFlow</h2></div><p class="muted">Cada etapa conserva duración e ID de aplicación YARN.</p></div><div id="jobs"></div></section>
+
+    <section class="section" aria-labelledby="workers-title">
+      <div class="ops-heading"><div><p class="section-label">Capacidad disponible</p><h2 id="workers-title">Workers de YARN</h2></div><p id="cluster-summary" class="muted"></p></div>
+      <div class="scroll"><table><thead><tr><th>Nodo</th><th>Estado</th><th>Contenedores</th><th>Memoria usada / total</th><th>vCores usados / total</th></tr></thead><tbody id="nodes"></tbody></table></div>
+    </section>
+
+    <section class="section" aria-labelledby="apps-title">
+      <div class="ops-heading"><div><p class="section-label">Historial distribuido</p><h2 id="apps-title">Aplicaciones de YARN</h2></div><p class="muted">Ejecuciones más recientes primero.</p></div>
+      <div class="scroll"><table><thead><tr><th>Aplicación</th><th>Estado</th><th>Progreso</th><th>Duración</th></tr></thead><tbody id="apps"></tbody></table></div>
+    </section>
+  </main>
+</body>
+</html>
