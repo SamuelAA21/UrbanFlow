@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('menu', 'portal', 'admin', 'todo', 'desplegar', 'procesar', 'paso', 'demo', 'streaming', 'resultados', 'dashboard', 'estado', 'conectar', 'eliminar')]
+    [ValidateSet('menu', 'portal', 'admin', 'respaldo', 'todo', 'desplegar', 'procesar', 'paso', 'demo', 'streaming', 'resultados', 'dashboard', 'estado', 'conectar', 'eliminar')]
     [string]$Accion = 'menu',
     [string]$Region = 'us-east-1',
     [string]$PortalCidr = '',
@@ -267,6 +267,7 @@ URBANFLOW - Predicción de demanda de taxis con Apache Spark en AWS
 7. Conectar por SSH al maestro
 8. ELIMINAR TODO EN AWS (deja la cuenta sin costos)
 9. Demo en vivo: Spark SQL + grafos + streaming (requiere haber procesado antes)
+10. Respaldar la base del portal en este computador
 0. Salir
 '@
     switch (Read-Host 'Elige una opción') {
@@ -279,6 +280,7 @@ URBANFLOW - Predicción de demanda de taxis con Apache Spark en AWS
         '7' { Run-Remote '' -Interactive }
         '8' { Remove-All }
         '9' { Live-Demo }
+        '10' { Backup-PortalDatabase }
         '0' { return }
         default { throw 'Opción no válida.' }
     }
@@ -289,6 +291,7 @@ URBANFLOW - Predicción de demanda de taxis con Apache Spark en AWS
 switch ($Accion) {
     'portal' { Deploy-Portal }
     'admin' { Open-PortalAdmin }
+    'respaldo' { Backup-PortalDatabase }
     'menu' { Menu }
     'todo' { Deploy; Process-All }
     'desplegar' { Deploy }

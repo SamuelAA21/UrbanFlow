@@ -79,3 +79,29 @@ function Open-PortalAdmin {
     & ssh @SshOpts -o ExitOnForwardFailure=yes -i $key -N -L '127.0.0.1:8090:127.0.0.1:8090' "ec2-user@$($info.PublicIpAddress)"
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo abrir el túnel de administración.' }
 }
+
+function Backup-PortalDatabase {
+    Test-Login
+    Assert-Activo
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $remoteDatabase = "/tmp/urbanflow-$stamp.sqlite3"
+    $remoteHelper = '/tmp/urbanflow-backup-sqlite.py'
+    $backupDirectory = Join-Path $EstadoDir 'respaldos'
+    $localDatabase = Join-Path $backupDirectory "urbanflow-$stamp.sqlite3"
+    New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
+
+    Step 'Creando una copia consistente de SQLite sin detener el portal'
+    Send-Files @((Join-Path $Raiz 'scripts\backup_sqlite.py')) $remoteHelper
+    try {
+        Run-Remote ("sudo -u hadoop /opt/urbanflow/venv/bin/python $remoteHelper " +
+            "/var/lib/urbanflow/urbanflow.sqlite3 $remoteDatabase; sudo chmod 0644 $remoteDatabase")
+        Receive-File $remoteDatabase $localDatabase
+        $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $localDatabase).Hash
+        Write-Host "Respaldo guardado: $localDatabase" -ForegroundColor Green
+        Write-Host "SHA-256: $hash"
+    } finally {
+        try { Run-Remote "sudo rm -f -- $remoteDatabase $remoteHelper" } catch {
+            Write-Warning 'El respaldo local se completo, pero no se pudieron retirar los temporales del maestro.'
+        }
+    }
+}
