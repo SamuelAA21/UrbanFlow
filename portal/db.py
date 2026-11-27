@@ -36,6 +36,20 @@ CREATE TABLE IF NOT EXISTS corridors (
  origin TEXT NOT NULL, destination TEXT NOT NULL, trips INTEGER NOT NULL,
  minutes REAL, PRIMARY KEY(origin,destination)
 );
+CREATE TABLE IF NOT EXISTS lab_models (
+ id INTEGER PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ artifact TEXT NOT NULL, metrics TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lab_requests (
+ id INTEGER PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ request_key TEXT NOT NULL UNIQUE, model_id INTEGER NOT NULL REFERENCES lab_models(id),
+ source TEXT NOT NULL CHECK(source='synthetic'), seed INTEGER NOT NULL,
+ day TEXT NOT NULL, hour INTEGER NOT NULL CHECK(hour BETWEEN 0 AND 23),
+ zone INTEGER NOT NULL, weekday INTEGER NOT NULL, weekend INTEGER NOT NULL,
+ period TEXT NOT NULL, static_estimate REAL NOT NULL, ml_estimate REAL NOT NULL,
+ simulated_count INTEGER NOT NULL CHECK(simulated_count>=0),
+ observed REAL CHECK(observed IS NULL)
+);
 """
 
 

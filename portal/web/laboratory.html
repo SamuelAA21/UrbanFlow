@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UrbanFlow | Laboratorio</title><link rel="stylesheet" href="/assets/style.css?v=4">
+<script type="module" src="/assets/laboratory.js"></script></head>
+<body class="operations">
+<header><div class="brand">Urban<span>Flow</span></div><a href="/">Panel de operación</a></header>
+<main>
+<section class="intro"><p class="context-line">Laboratorio de demanda · HTTP → backend → SQLite</p>
+<h1>Aprender de lo observado. Simular por separado.</h1>
+<p>Comparamos un promedio estadístico fijo por zona y hora con una regresión Ridge que aprende relaciones de calendario y demanda histórica. Usa las primeras fechas para entrenar y las últimas para evaluar, sin actualizar los modelos durante la prueba.</p>
+<p>El Random Forest de Spark continúa en el panel original. Este experimento adicional funciona con las observaciones históricas ya publicadas, sin necesitar el clúster.</p>
+<button id="train">Entrenar y evaluar con datos reales</button>
+<p id="message" role="status">Consultando la base de datos…</p></section>
+<section class="section"><h2>Evaluación sobre fechas reservadas</h2><p id="provenance" style="overflow-wrap:anywhere"></p>
+<div class="scroll"><table><thead><tr><th>Modelo</th><th>MAE</th><th>RMSE</th><th>R²</th></tr></thead><tbody id="metrics"></tbody></table></div>
+<p id="split"></p><p>La comparación usa conteos reales agregados de NYC TLC. Una mejora no está garantizada. Los resultados sintéticos nunca entran al entrenamiento ni se usan como verdad para medir aciertos.</p></section>
+<section class="section"><h2>Peticiones automáticas y enriquecimiento</h2>
+<p>El generador envía una petición HTTP por segundo. El backend elige zona y hora a partir del modelo estadístico fijo, genera un conteo sintético con variación aleatoria y añade día de semana, fin de semana, franja horaria y ambas estimaciones. Es un escenario de una zona-hora, no un viaje individual ni un dato real nuevo.</p>
+<label>Peticiones por sesión <input id="limit" type="number" min="1" max="500" value="30"></label>
+<button id="start" disabled>Iniciar peticiones</button> <button id="stop" disabled>Detener</button>
+<p id="progress" role="status"></p><h3 id="count">0 peticiones guardadas</h3>
+<div class="scroll"><table><thead><tr><th>ID / modelo</th><th>Fecha / hora</th><th>Zona</th><th>Enriquecimiento</th><th>Fijo</th><th>ML</th><th>Sintético</th><th>Real observado</th></tr></thead><tbody id="requests"></tbody></table></div>
+<p>Recarga esta página para comprobar la persistencia. Cerrar la página detiene el generador. El histórico y las versiones del modelo permanecen guardados en SQLite.</p></section>
+</main></body></html>

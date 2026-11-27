@@ -12,7 +12,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from . import cluster_status
+from . import cluster_status, laboratory
 from .db import connect, rows
 from .settings import APP, SOURCE
 
@@ -137,11 +137,41 @@ def cluster(request):
     return JSONResponse(cluster_status.status())
 
 
+def lab_page(request):
+    return FileResponse(WEB / 'laboratory.html')
+
+
+def lab_status(request):
+    return JSONResponse(laboratory.status())
+
+
+async def lab_action(request):
+    if request.headers.get('content-type', '').split(';')[0] != 'application/json':
+        raise HTTPException(415, 'Envia JSON.')
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > 2048:
+            raise HTTPException(413, 'Solicitud demasiado grande.')
+    try:
+        body = json.loads(data)
+        if not isinstance(body, dict):
+            raise ValueError('Se requiere un objeto JSON.')
+        action = laboratory.train if request.url.path.endswith('/train') else lambda: laboratory.generate(body)
+        result = await run_in_threadpool(action)
+        return JSONResponse(result, status_code=201)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+
+
 routes = [Route("/", page), Route("/health", health), Route("/api/metadata", metadata),
           Mount("/assets", StaticFiles(directory=WEB / "assets"))]
 if ADMIN:
     routes += [Route("/api/jobs", jobs), Route("/api/jobs", create_job, methods=["POST"]),
-               Route("/api/cluster", cluster)]
+               Route("/api/cluster", cluster), Route('/laboratory', lab_page),
+               Route('/api/lab', lab_status),
+               Route('/api/lab/train', lab_action, methods=['POST']),
+               Route('/api/lab/requests', lab_action, methods=['POST'])]
 else:
     routes += [Route("/api/profile", profile), Route("/api/predictions", predictions),
                Route("/api/corridors", corridors), Route("/api/geography", geography)]

@@ -66,7 +66,7 @@ $form.Text = 'UrbanFlow - Lanzador'
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
-$form.ClientSize = New-Object Drawing.Size(660, 570)
+$form.ClientSize = New-Object Drawing.Size(660, 620)
 $form.BackColor = [Drawing.Color]::FromArgb(243, 247, 250)
 $form.Font = New-Object Drawing.Font('Segoe UI', 10)
 
@@ -131,7 +131,11 @@ Add-Button 'Abrir panel administrativo' 338 336 286 { Open-Url 'http://127.0.0.1
 Add-Button 'Abrir portal publico' 32 386 286 { Open-PublicPortal } | Out-Null
 Add-Button 'Respaldar base de datos' 338 386 286 { Start-UrbanFlow 'respaldo' } | Out-Null
 
-$remove = Add-Button 'Eliminar recursos de AWS' 32 457 592 {
+Add-Button 'Laboratorio local (sin AWS)' 32 436 592 {
+    Start-Process -FilePath 'cmd.exe' -WorkingDirectory $projectRoot -ArgumentList "/c `"`"$(Join-Path $projectRoot 'Demo-local.cmd')`"`""
+} | Out-Null
+
+$remove = Add-Button 'Eliminar recursos de AWS' 32 507 592 {
     $answer = [Windows.Forms.MessageBox]::Show(
         "Esto eliminara CloudFront, las instancias y la red de UrbanFlow en AWS. El respaldo local se conserva.`n`n¿Continuar?",
         'Confirmar eliminacion', 'YesNo', 'Warning', 'Button2')
@@ -145,7 +149,7 @@ $note = New-Object Windows.Forms.Label
 $note.Text = 'Las consolas permanecen abiertas para mostrar el progreso. Cierra la consola del tunel para salir del panel admin.'
 $note.ForeColor = [Drawing.Color]::FromArgb(85, 96, 105)
 $note.Size = New-Object Drawing.Size(596, 42)
-$note.Location = New-Object Drawing.Point(32, 515)
+$note.Location = New-Object Drawing.Point(32, 565)
 $form.Controls.Add($note)
 
 if ($AutoCloseSeconds -gt 0) {

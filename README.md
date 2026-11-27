@@ -6,6 +6,35 @@ Portal de movilidad para explorar recogidas históricas de taxis amarillos en Nu
 
 Haz doble clic en `UrbanFlow.cmd`. El lanzador permite iniciar sesión en AWS, desplegar uno o seis meses, abrir los paneles, consultar el estado, respaldar SQLite y eliminar los recursos sin escribir comandos. Las acciones de AWS abren una consola visible para mostrar su progreso y sus errores.
 
+## Laboratorio local: modelos y solicitudes persistentes
+
+Haz doble clic en `Demo-local.cmd`, o elige **Laboratorio local (sin AWS)** en `UrbanFlow.cmd`.
+Abre http://127.0.0.1:8090/laboratory y deja abierta la consola del servidor.
+Requiere Python y las dos dependencias de `portal/requirements.txt` (el comando las instala si faltan).
+Si el puerto 8090 está ocupado por un túnel de AWS, ciérralo antes o ejecuta `python -m portal.local_demo --port 8091`.
+
+La primera ejecución restaura el último respaldo de `estado/respaldos` en `runtime/demo/urbanflow.sqlite3`.
+Las siguientes reutilizan esa base y conservan las solicitudes y modelos. El respaldo original no se modifica.
+
+1. Pulsa **Entrenar y evaluar con datos reales**. Se crea una versión en `lab_models` con parámetros, huella SHA-256 y métricas.
+2. Las primeras 70% de fechas completas de `predictions.observed` entrenan un promedio por zona/hora y una regresión Ridge; las fechas restantes evalúan ambos modelos congelados. La penalización de Ridge se fija antes de evaluar. No se elige un ganador ni se ajustan parámetros con la prueba.
+3. Pulsa **Iniciar peticiones**. El navegador envía una petición HTTP por segundo, hasta el límite elegido. Cerrar la página o pulsar Detener termina la generación; una petición en tránsito puede terminar de guardarse.
+4. Recarga la página o reinicia el servidor: las filas siguen en SQLite. `GET /api/lab` permite inspeccionarlas como JSON.
+
+Cada `POST /api/lab/requests` guarda un escenario sintético de una zona-hora, con semilla, clave idempotente, versión del modelo, estimación fija, estimación ML, conteo simulado y enriquecimiento de calendario. No representa una solicitud real de taxi individual. La generación usa el promedio estadístico congelado y una variación log-normal explícita (sigma=0.3), no realimenta las predicciones ML.
+
+`lab_requests.source` siempre es `synthetic` y `observed` siempre es NULL, también por restricciones de SQLite. El entrenamiento consulta exclusivamente observaciones históricas de `predictions`, nunca solicitudes sintéticas, perfiles estimados ni la columna `estimate`. No se calcula acierto contra conteos simulados. La comparación local reutiliza las observaciones publicadas por Spark, pero sus particiones y métricas son un experimento diferente de las métricas históricas de Random Forest/GBT; no deben compararse directamente.
+
+El reentrenamiento es explícito y versionado: tras publicar nuevas observaciones reales mediante el pipeline de Spark, puede repetirse. Más solicitudes simuladas no equivalen a más observaciones reales ni mejoran automáticamente el modelo. Esta entrega no incorpora datos actuales de clima ni una fuente real en vivo.
+
+Para demostrarlo ante el profesor: muestra la comparación temporal, inicia 30 peticiones, observa sus IDs, abre `/api/lab`, reinicia y comprueba la persistencia. Las tablas auditables son `lab_models` y `lab_requests`; el respaldo SQLite incluye ambas.
+
+## Justificación y límites de Big Data
+
+Los millones de viajes comprimidos son una fuente real para ETL, agregaciones, ventanas temporales, grafos y MLlib. El laboratorio de solicitudes funciona en una máquina; su existencia no demuestra por sí sola necesidad de Hadoop. Tampoco deben contarse las tres réplicas HDFS como tres veces más información ni presentar simulaciones como crecimiento real del histórico.
+
+La justificación experimental pendiente es medir el mismo ETL/modelo sobre uno, tres y seis meses reales, comparando uno y tres ejecutores, con iguales reglas y parámetros. Registra bytes lógicos, viajes válidos, duración, memoria y tiempo de entrenamiento. Los scripts actuales permiten seleccionar hasta seis meses; no se ejecutó un nuevo benchmark distribuido por añadir este laboratorio. Las métricas de una comparación deben salir de ejecuciones medidas, no de estimaciones de escalabilidad.
+
 ## Despliegue temporal en AWS
 
 Desde Windows, abre PowerShell en la raíz del repositorio. Necesitas AWS CLI con sesión activa, OpenSSH, tar y permisos para operar el clúster EC2 en la región elegida. El clúster usa cuatro instancias y discos. Se factura conforme a tu cuenta y región.
