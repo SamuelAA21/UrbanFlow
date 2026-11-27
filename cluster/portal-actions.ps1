@@ -36,7 +36,7 @@ function Deploy-Portal {
     $remote = $null
     try {
         # El envío contiene solo fuentes. El estado local de AWS nunca entra al paquete.
-        $files = @('portal/requirements.txt','portal/settings.py','portal/db.py','portal/app.py','portal/laboratory.py',
+        $files = @('portal/requirements.txt','portal/settings.py','portal/db.py','portal/app.py','portal/laboratory.py','portal/replay.py',
             'portal/cluster_status.py','portal/worker.py','portal/bootstrap.py','portal/web',
             'spark','cluster/pipeline.sh','cluster/instalar-portal.sh','dashboard/taxi_zones.geojson')
         & tar -czf $archive --exclude '__pycache__' -C $Raiz @files

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .db import connect, initialize, publish
 from .settings import APP, MAX_JOB_SECONDS, RUNTIME
+from .replay import enqueue_due
 
 APP_ID = re.compile(r"application_\d+_\d+")
 PREPARE = ("cargar", "etl", "perfil", "modelo", "sql")
@@ -30,6 +31,9 @@ def run_stage(job, name, folder, deadline):
     logs = folder / "logs"
     logs.mkdir(exist_ok=True)
     env = dict(os.environ, URBANFLOW_RESULTS=str(folder), URBANFLOW_LOGS=str(logs))
+    if job['kind'] == 'replay':
+        env['URBANFLOW_CUTOFF'] = job['cutoff_day']
+        env['URBANFLOW_MODEL_PATH'] = f"/urbanflow/modelos/replay/{job['id']}"
     if job["kind"] == "corridors":
         env["URBANFLOW_SQL_MONTH"] = job["months"]
     yarn_id = None
@@ -80,6 +84,7 @@ def main():
     for job in interrupted:
         fail(job["id"], "El ejecutor se reinició durante el trabajo.")
     while True:
+        enqueue_due()
         job = claim()
         if job is None:
             time.sleep(2)
@@ -88,7 +93,7 @@ def main():
             folder = RUNTIME / "runs" / str(job["id"])
             folder.mkdir(parents=True, exist_ok=False)
             deadline = time.monotonic() + MAX_JOB_SECONDS
-            for name in (PREPARE if job["kind"] == "prepare" else ("sql",)):
+            for name in (PREPARE if job["kind"] in ('prepare', 'replay') else ("sql",)):
                 run_stage(job, name, folder, deadline)
             with connect() as conn:
                 publish(conn, job, folder)

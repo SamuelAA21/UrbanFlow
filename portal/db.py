@@ -40,6 +40,24 @@ CREATE TABLE IF NOT EXISTS lab_models (
  id INTEGER PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  artifact TEXT NOT NULL, metrics TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS replay_schedule (
+ id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL DEFAULT 0,
+ months TEXT NOT NULL, next_day TEXT NOT NULL, end_day TEXT NOT NULL,
+ interval_minutes INTEGER NOT NULL, next_run TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ last_job_id INTEGER REFERENCES jobs(id), message TEXT
+);
+CREATE TABLE IF NOT EXISTS forecast_history (
+ job_id INTEGER NOT NULL REFERENCES jobs(id), cutoff_day TEXT NOT NULL,
+ day TEXT NOT NULL, zone INTEGER NOT NULL, hour INTEGER NOT NULL,
+ estimate REAL NOT NULL, baseline REAL,
+ source TEXT NOT NULL DEFAULT 'historical_replay',
+ PRIMARY KEY(job_id,day,zone,hour)
+);
+CREATE TABLE IF NOT EXISTS replay_observations (
+ day TEXT NOT NULL, zone INTEGER NOT NULL, hour INTEGER NOT NULL,
+ trips REAL NOT NULL, job_id INTEGER NOT NULL REFERENCES jobs(id),
+ PRIMARY KEY(day,zone,hour)
+);
 CREATE TABLE IF NOT EXISTS lab_requests (
  id INTEGER PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  request_key TEXT NOT NULL UNIQUE, model_id INTEGER NOT NULL REFERENCES lab_models(id),
@@ -71,6 +89,9 @@ def initialize():
     with connect() as conn:
         conn.execute("PRAGMA journal_mode=DELETE")
         conn.executescript(SCHEMA)
+        columns = {row[1] for row in conn.execute('PRAGMA table_info(jobs)')}
+        if 'cutoff_day' not in columns:
+            conn.execute('ALTER TABLE jobs ADD COLUMN cutoff_day TEXT')
 
 
 def rows(conn, sql, params=()):
@@ -89,7 +110,7 @@ def replace_csv(conn, table, sql, path, convert):
 
 
 def publish(conn, job, folder):
-    if job["kind"] == "prepare":
+    if job["kind"] in ('prepare', 'replay'):
         replace_csv(conn, "profile", "INSERT INTO profile VALUES (?,?,?,?,?)", folder / "perfil.csv",
                     lambda r: (r["zona_origen"], r["dia_semana"], r["hora"], r["viajes"], r["dias"]))
         replace_csv(conn, "predictions", "INSERT INTO predictions VALUES (?,?,?,?,?,?)",
@@ -97,11 +118,32 @@ def publish(conn, job, folder):
                     lambda r: (r["fecha"], r["zona_origen"], r["hora"], r["viajes"],
                                r["pred_modelo"], r["pred_perfil"]))
         with (folder / "prediccion_manana.csv").open(encoding="utf-8", newline="") as source:
-            conn.executemany("INSERT INTO predictions VALUES (?,?,?,NULL,?,NULL)",
-                             ((r["fecha"], r["zona_origen"], r["hora"], r["viajes_esperados"])
+            conn.executemany("INSERT INTO predictions VALUES (?,?,?,NULL,?,?)",
+                             ((r["fecha"], r["zona_origen"], r["hora"], r["viajes_esperados"], r.get('pred_perfil'))
                               for r in csv.DictReader(source)))
         metadata = {name: json.loads((folder / (name + ".json")).read_text(encoding="utf-8"))
                     for name in ("etl_resumen", "metricas_modelo")}
+        if job['kind'] == 'replay':
+            cutoff = job['cutoff_day']
+            if (metadata['etl_resumen'].get('cutoff_day') != cutoff
+                    or metadata['metricas_modelo']['prueba_hasta'] > cutoff
+                    or metadata['metricas_modelo'].get('deployment_training_until') != cutoff):
+                raise ValueError('Los resultados contienen un corte distinto o fechas futuras.')
+            metadata['replay'] = {'cutoff_day': cutoff, 'source': 'historical_replay',
+                                  'horizon_days': 1, 'processing': 'cumulative batch on Spark/YARN'}
+            with (folder / 'observaciones_lote.csv').open(encoding='utf-8', newline='') as source:
+                observations = list(csv.DictReader(source))
+            if not observations or any(r['fecha'] != cutoff for r in observations):
+                raise ValueError('El lote observado no coincide con el corte.')
+            conn.executemany('''INSERT OR IGNORE INTO replay_observations VALUES(?,?,?,?,?)''',
+                             ((r['fecha'], r['zona_origen'], r['hora'], r['viajes'], job['id']) for r in observations))
+            from datetime import date, timedelta
+            tomorrow = (date.fromisoformat(cutoff) + timedelta(days=1)).isoformat()
+            forecast = conn.execute('SELECT day,zone,hour,estimate,baseline FROM predictions WHERE observed IS NULL').fetchall()
+            if not forecast or any(r['day'] != tomorrow for r in forecast):
+                raise ValueError('El pronostico no corresponde al dia siguiente del corte.')
+            conn.executemany('INSERT INTO forecast_history(job_id,cutoff_day,day,zone,hour,estimate,baseline) VALUES(?,?,?,?,?,?,?)',
+                             ((job['id'], cutoff, r['day'], r['zone'], r['hour'], r['estimate'], r['baseline']) for r in forecast))
         size_file = folder / "bytes_crudos.txt"
         if size_file.exists():
             input_bytes = int(size_file.read_text(encoding="utf-8").strip())

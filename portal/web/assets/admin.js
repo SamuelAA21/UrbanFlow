@@ -44,6 +44,7 @@ function renderModel(meta) {
   byId("training-rows").textContent = format(model.filas_entrenamiento);
   byId("training-time").textContent = seconds(model.tiempos_entrenamiento[model.mejor_modelo] ?? model.segundos_entrenamiento);
   byId("model-period").textContent = `Entrena hasta ${model.entrenamiento_hasta}; evalúa ${format(model.filas_prueba)} filas del ${model.prueba_desde} al ${model.prueba_hasta}.`;
+  if (model.deployment_training_until) byId('model-period').textContent += ` Estas métricas son del ajuste de evaluación. El modelo operativo se reentrenó después con observaciones hasta ${model.deployment_training_until}.`;
   byId("model-reading").textContent = `El modelo explica ${decimal(best.r2 * 100,1)} % de la variación observada. Su error típico absoluto es de ${decimal(best.mae,1)} recogidas por zona y hora; no representa demanda insatisfecha.`;
   table("models", Object.entries(model.metricas).map(([name, metrics]) => [
     name === model.mejor_modelo ? `${name} · publicado` : name,
@@ -61,7 +62,7 @@ function renderJobs(items) {
   for (const job of items) {
     const section = document.createElement("div"); section.className = "job";
     const title = document.createElement("strong"); title.className = job.status;
-    title.textContent = `#${job.id} · ${job.kind === "prepare" ? "Preparación completa" : "Cálculo de corredores"} · ${labels[job.status]} ${duration(job.started_at, job.ended_at)}`;
+    title.textContent = `#${job.id} · ${job.kind === 'replay' ? 'Lote histórico distribuido: corte ' + job.cutoff_day : job.kind === "prepare" ? "Preparación completa" : "Cálculo de corredores"} · ${labels[job.status]} ${duration(job.started_at, job.ended_at)}`;
     const detail = document.createElement("p"); detail.className = "muted";
     detail.textContent = `${job.months} · Solicitado ${stamp(job.created_at)}${job.error ? ` · ${job.error}` : ""}`;
     const list = document.createElement("ol");

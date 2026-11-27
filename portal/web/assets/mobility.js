@@ -210,10 +210,15 @@ async function releases(initial = false) {
   } else {
     byId("release").textContent = "La preparación aún no ha publicado datos.";
   }
-  if (mobility && !day.value) {
-    day.min = meta.first_prediction; day.max = meta.last_prediction; day.value = meta.first_prediction;
+  const publication = mobility ? `${mobility.job_id}:${mobility.published_at}` : '';
+  if (mobility && day.dataset.publication !== publication) {
+    const followLatest = !day.value || day.value === day.max;
+    day.min = meta.first_prediction; day.max = meta.last_prediction;
+    if (followLatest || day.value < day.min || day.value > day.max) day.value = meta.last_prediction;
+    day.dataset.publication = publication;
     const model = mobility.details.metricas_modelo;
     byId("model-note").textContent = `${model.mejor_modelo}. Evaluación del ${model.prueba_desde} al ${model.prueba_hasta}; ${model.fecha_pronostico} es un pronóstico fuera de muestra.`;
+    if (mobility.details.replay) byId('model-note').textContent += ` Reproducción histórica: corte ${mobility.details.replay.cutoff_day}.`;
     if (!initial) { profiles(); predictions(); }
   }
   const release = meta.releases.corridors;

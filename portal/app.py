@@ -12,7 +12,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from . import cluster_status, laboratory
+from . import cluster_status, laboratory, replay
 from .db import connect, rows
 from .settings import APP, SOURCE
 
@@ -145,6 +145,10 @@ def lab_status(request):
     return JSONResponse(laboratory.status())
 
 
+def replay_status(request):
+    return JSONResponse(replay.status())
+
+
 async def lab_action(request):
     if request.headers.get('content-type', '').split(';')[0] != 'application/json':
         raise HTTPException(415, 'Envia JSON.')
@@ -157,7 +161,10 @@ async def lab_action(request):
         body = json.loads(data)
         if not isinstance(body, dict):
             raise ValueError('Se requiere un objeto JSON.')
-        action = laboratory.train if request.url.path.endswith('/train') else lambda: laboratory.generate(body)
+        if request.url.path.endswith('/replay'):
+            action = lambda: replay.configure(body)
+        else:
+            action = laboratory.train if request.url.path.endswith('/train') else lambda: laboratory.generate(body)
         result = await run_in_threadpool(action)
         return JSONResponse(result, status_code=201)
     except ValueError as error:
@@ -170,6 +177,7 @@ if ADMIN:
     routes += [Route("/api/jobs", jobs), Route("/api/jobs", create_job, methods=["POST"]),
                Route("/api/cluster", cluster), Route('/laboratory', lab_page),
                Route('/api/lab', lab_status),
+               Route('/api/replay', replay_status), Route('/api/replay', lab_action, methods=['POST']),
                Route('/api/lab/train', lab_action, methods=['POST']),
                Route('/api/lab/requests', lab_action, methods=['POST'])]
 else:

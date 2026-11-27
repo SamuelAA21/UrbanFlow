@@ -47,6 +47,8 @@ VARIABLES = ["zona_origen", "hora", "dia_semana", "fin_de_semana", "mes_num", "f
 spark = sesion("3 Modelo")
 zonas = spark.read.parquet(HDFS + "/referencia/zonas").withColumnRenamed("zona_id", "zona_origen")
 zh = spark.read.parquet(HDFS + "/agregado/zona_hora").select("fecha", "hora", "zona_origen", "viajes")
+ultima_fecha = zh.agg(F.max('fecha')).collect()[0][0]
+corte = ultima_fecha - datetime.timedelta(days=args.dias_prueba)
 
 
 def calendario(df):
@@ -57,7 +59,7 @@ def calendario(df):
 
 
 # --- Malla completa zona x fecha x hora ------------------------------------------------
-activas = (zh.groupBy("zona_origen").agg(F.sum("viajes").alias("total"))
+activas = (zh.filter(F.col('fecha') <= F.lit(corte)).groupBy("zona_origen").agg(F.sum("viajes").alias("total"))
            .filter(F.col("total") >= args.min_viajes_zona).select("zona_origen"))
 n_zonas = activas.count()
 fechas = zh.select("fecha").distinct()
@@ -121,11 +123,19 @@ for nombre, columna in [("Random Forest (MLlib)", "pred_rf"), ("Gradient-Boosted
     metricas[nombre] = {m: round(ev.setMetricName(m).evaluate(pred), 4) for m in ("rmse", "mae", "r2")}
     log("{:40s} RMSE {rmse:7.3f} | MAE {mae:7.3f} | R² {r2:6.3f}".format(nombre, **metricas[nombre]))
 
-mejor = min(ALGORITMOS, key=lambda n: metricas[n]["rmse"])
+# Fixed choice before evaluation: do not select/tune on test labels.
+mejor = 'Random Forest (MLlib)'
 modelo = modelos[mejor]
 segundos_entreno = tiempos_entreno[mejor]
-log("Mejor modelo en prueba: {}".format(mejor))
-modelo.write().overwrite().save(HDFS + "/modelos/demanda")
+log("Modelo fijado antes de evaluar: {}".format(mejor))
+# Evaluation above stays untouched. Fit the fixed RF for deployment using ALL
+# genuinely observed rows available at the replay cutoff, never the next day.
+perfil = datos.groupBy('zona_origen', 'dia_semana', 'hora').agg(F.avg('viajes').alias('perfil_historico'))
+todos = datos.join(perfil, ['zona_origen', 'dia_semana', 'hora'])
+with Cronometro() as deployment_timer:
+    modelo = Pipeline(stages=[VectorAssembler(inputCols=VARIABLES, outputCol='variables'), ALGORITMOS[mejor]]).fit(todos)
+model_path = os.environ.get('URBANFLOW_MODEL_PATH', HDFS + '/modelos/demanda')
+modelo.write().overwrite().save(model_path)
 pred = pred.withColumn("pred_modelo", F.col(COLUMNA[mejor]))
 importancias = modelo.stages[-1].featureImportances.toArray().tolist()
 guardar_csv(args.resultados, "importancia_variables.csv",
@@ -150,12 +160,19 @@ futuro = (semana.groupBy("zona_origen", "hora").agg(
 futuro = calendario(futuro).join(perfil, ["zona_origen", "dia_semana", "hora"], "left").fillna(0.0)
 pronostico = (modelo.transform(futuro).join(zonas, "zona_origen")
               .select("fecha", "hora", "zona_origen", "borough", "zona",
+                      F.round('perfil_historico', 1).alias('pred_perfil'),
                       F.round(F.greatest(F.col("prediction"), F.lit(0.0)), 1).alias("viajes_esperados"))
               .orderBy("zona_origen", "hora"))
 guardar_csv(args.resultados, "prediccion_manana.csv", pronostico)
 
 guardar_json(args.resultados, "metricas_modelo.json", {
     "algoritmo": mejor, "mejor_modelo": mejor,
+    'selection_policy': 'Random Forest fixed a priori; GBT is a reported comparator, not selected on test',
+    'deployment_training_until': ultima_fecha,
+    'deployment_training_seconds': deployment_timer.segundos,
+    'model_path': model_path,
+    'deployment_policy': 'Refit fixed RF on all real observations through cutoff after frozen temporal evaluation',
+    'evaluation_mode': 'rolling one-day observations; no synthetic labels',
     "arboles": args.arboles, "profundidad": args.profundidad, "iteraciones_gbt": args.iteraciones_gbt, "max_bins": 256,
     "tiempos_entrenamiento": tiempos_entreno,
     "variables": VARIABLES,

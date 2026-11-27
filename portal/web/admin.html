@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>UrbanFlow | Operación</title>
-  <link rel="stylesheet" href="/assets/style.css?v=4">
-  <script type="module" src="/assets/admin.js?v=4"></script>
+  <link rel="stylesheet" href="/assets/style.css?v=6">
+  <script type="module" src="/assets/admin.js?v=5"></script>
+  <script type="module" src="/assets/replay.js?v=1"></script>
 </head>
 <body class="operations">
   <header><div class="brand">Urban<span>Flow</span></div><div class="header-context">Centro de operación</div></header>
@@ -15,6 +16,30 @@
       <h1>Qué procesó UrbanFlow y cómo respondió el clúster.</h1>
       <p id="notice" class="release" role="status">Consultando backend, modelo y YARN…</p>
       <p><a href="/laboratory">Abrir laboratorio: modelos, enriquecimiento y peticiones automáticas</a></p>
+    </section>
+
+    <section class="section replay-panel" aria-labelledby="replay-title">
+      <h2 id="replay-title">Motor distribuido en ejecución</h2>
+      <p>Reproducción de viajes históricos reales por lotes diarios. El maestro programa; Spark procesa en los workers de YARN. Continúa aunque cierres esta página.</p>
+      <p id="engine-status" role="status">Consultando motor…</p>
+      <form id="replay-form" class="replay-form">
+        <label>Meses de entrada (consecutivos)<input id="replay-months" required placeholder="2025-01,2025-02,2025-03,2025-04,2025-05,2025-06"></label>
+        <label>Primer corte histórico<input id="replay-start" type="date" required></label>
+        <label>Último corte histórico<input id="replay-end" type="date" required></label>
+        <label>Minutos de espera entre corridas<input id="replay-interval" type="number" min="1" max="1440" value="10" required></label>
+        <button id="replay-enable" disabled>Programar motor en AWS</button>
+        <button id="replay-stop" type="button" disabled>Detener programación</button>
+        <button id="replay-now" type="button" disabled>Adelantar próximo lote</button>
+      </form>
+      <p class="muted">Cada corrida reprocesa el histórico acumulado hasta el corte, añade un día real y publica el pronóstico del siguiente. La espera empieza al terminar la corrida; no hay ejecuciones superpuestas. Detener la programación permite que termine el trabajo activo.</p>
+      <p id="replay-message" role="status"></p>
+      <div class="engine-live"><div><span>Corte del lote</span><strong id="engine-cutoff">—</strong></div><div><span>Estado / etapa</span><strong id="engine-stage">En espera</strong></div><div><span>Aplicación YARN</span><strong id="engine-yarn">—</strong></div><div><span>Próxima corrida</span><strong id="engine-next">Sin programar</strong></div></div>
+      <p id="engine-detail" aria-live="polite"></p>
+      <h3>Pronósticos publicados por corrida</h3>
+      <div class="scroll"><table><thead><tr><th>Trabajo</th><th>Corte real disponible</th><th>Día pronosticado</th><th>Celdas zona-hora</th><th>Total estimado</th></tr></thead><tbody id="replay-forecasts"></tbody></table></div>
+      <h3>Evaluación cuando llega el siguiente lote real</h3>
+      <div class="scroll"><table><thead><tr><th>Trabajo</th><th>Día observado</th><th>Celdas comparadas</th><th>MAE Random Forest</th><th>MAE promedio fijo</th></tr></thead><tbody id="replay-evaluation"></tbody></table></div>
+      <p class="muted">Estas métricas cruzan pronósticos guardados con conteos reales de un lote posterior. No usan las solicitudes sintéticas del laboratorio.</p>
     </section>
 
     <section class="ops-overview" aria-labelledby="data-title">

@@ -70,7 +70,8 @@ class LaboratoryTests(unittest.TestCase):
             with patch.dict(os.environ, {'URBANFLOW_ADMIN': '1' if admin else '0'}):
                 importlib.reload(application)
             for path, method in (('/api/lab', 'GET'), ('/api/lab/train', 'POST'),
-                                 ('/api/lab/requests', 'POST'), ('/laboratory', 'GET')):
+                                 ('/api/lab/requests', 'POST'), ('/laboratory', 'GET'),
+                                 ('/api/replay', 'GET'), ('/api/replay', 'POST')):
                 scope = Request({'type': 'http', 'method': method, 'path': path,
                                  'query_string': b'', 'headers': []}).scope
                 matches = [r for r in application.app.routes if r.matches(scope)[0] is Match.FULL]

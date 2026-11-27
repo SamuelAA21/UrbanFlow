@@ -7,6 +7,7 @@ que es la base del análisis y del modelo.
 import argparse
 import os
 import sys
+import datetime
 from functools import reduce
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +22,9 @@ p.add_argument("--meses", required=True, help="Ej: 2025-01,2025-02")
 p.add_argument("--resultados", required=True)
 args = p.parse_args()
 meses = [m.strip() for m in args.meses.split(",") if m.strip()]
+cutoff = os.environ.get('URBANFLOW_CUTOFF')
+if cutoff:
+    cutoff = datetime.date.fromisoformat(cutoff).isoformat()
 
 spark = sesion("1 ETL")
 tiempos = {}
@@ -50,6 +54,9 @@ for mes in meses:
         F.col("total_amount").cast("double").alias("total"),
         F.lit(mes).alias("mes")))
 crudo = reduce(DataFrame.unionByName, partes)
+if cutoff:
+    # Files may contain later trips; no later row may reach aggregates or training.
+    crudo = crudo.filter(F.to_date('inicio') <= F.lit(cutoff).cast('date'))
 crudo = crudo.withColumn("duracion_min", (F.unix_timestamp("fin") - F.unix_timestamp("inicio")) / 60.0)
 
 # --- Reglas de calidad (un valor nulo cuenta como inválido) ----------------------------
@@ -104,10 +111,19 @@ with Cronometro() as c:
     filas_agregadas = spark.read.parquet(HDFS + "/agregado/zona_hora").count()
 tiempos["agregacion_zona_hora_s"] = c.segundos
 log("Tabla zona x fecha x hora: {:,} filas ({} s)".format(filas_agregadas, c.segundos))
+if cutoff:
+    observed = spark.read.parquet(HDFS + '/agregado/zona_hora').filter(F.col('fecha') == F.lit(cutoff).cast('date'))
+    # Full grid includes observed zero-count hours, not absent forecast labels.
+    zones = spark.read.parquet(HDFS + '/referencia/zonas').filter(F.col('zona_id').between(1, 263)).select(F.col('zona_id').alias('zona_origen'))
+    hours = spark.range(24).select(F.col('id').cast('int').alias('hora'))
+    observed = (zones.crossJoin(hours).withColumn('fecha', F.lit(cutoff).cast('date'))
+                .join(observed.select('fecha','zona_origen','hora','viajes'), ['fecha','zona_origen','hora'], 'left').fillna(0, ['viajes']))
+    guardar_csv(args.resultados, 'observaciones_lote.csv', observed)
 limpio.unpersist()
 
 guardar_json(args.resultados, "etl_resumen.json", {
     "meses": meses,
+    'cutoff_day': cutoff,
     "registros_crudos": total_crudo,
     "registros_validos": total_valido,
     "porcentaje_descartado": round(100.0 * (total_crudo - total_valido) / total_crudo, 2),

@@ -6,6 +6,28 @@ Portal de movilidad para explorar recogidas históricas de taxis amarillos en Nu
 
 Haz doble clic en `UrbanFlow.cmd`. El lanzador permite iniciar sesión en AWS, desplegar uno o seis meses, abrir los paneles, consultar el estado, respaldar SQLite y eliminar los recursos sin escribir comandos. Las acciones de AWS abren una consola visible para mostrar su progreso y sus errores.
 
+## Motor periódico distribuido en AWS
+
+La reproducción por lotes se ejecuta en el servicio `urbanflow-worker` del maestro EC2. Este programa corridas reales de Spark sobre YARN (tres ejecutores configurados), sin depender de que haya un navegador abierto. No crea una cuarta máquina ni ejecuta Spark en el computador del operador.
+
+1. Despliega o actualiza con `urbanflow.ps1 portal` y los meses deseados. Antes de actualizar, detén la programación y espera a que no haya trabajos pendientes o corriendo.
+2. Abre el panel administrativo mediante `urbanflow.ps1 admin`. En **Motor distribuido en ejecución**, indica meses, primer corte histórico, último corte e intervalo.
+3. Ejemplo de exposición: meses `2025-01,2025-02,2025-03,2025-04,2025-05,2025-06`, primer corte `2025-06-28`, último `2025-06-30`, intervalo de 10 minutos. Con un mes de junio también es válido; seis meses aumentan el volumen real procesado. El primer corte exige al menos 28 días de historia.
+4. Pulsa **Programar motor en AWS**. La primera corrida queda disponible inmediatamente; las siguientes esperan el intervalo **después** de finalizar la anterior. Si dura 15 minutos y el intervalo es 10, el siguiente inicio será unos 25 minutos después del primero. No hay superposición ni garantía de rendimiento sin medición.
+5. **Adelantar próximo lote** evita la espera cuando el motor está entre corridas. **Detener programación** impide corridas futuras y deja terminar la actual.
+
+Cada corrida avanza un día y ejecuta ingesta HDFS, ETL limitado al corte, perfil estadístico, evaluación temporal/entrenamiento MLlib y Spark SQL. Es procesamiento batch acumulativo con una ventana histórica creciente; **no** es Structured Streaming ni ETL incremental que lea solo los registros nuevos. Los Parquet pueden estar ya descargados, pero ninguna fila posterior al corte entra en agregados ni entrenamiento.
+
+La elección de Random Forest queda fijada antes de evaluar, en lugar de escoger al ganador según la prueba. Tras evaluar, se vuelve a ajustar RF con todas las observaciones disponibles hasta el corte para producir el pronóstico del día siguiente. Se conserva el promedio estadístico como comparación. No se implementa todavía un horizonte semanal.
+
+El motor guarda los modelos por corrida en HDFS (`/urbanflow/modelos/replay/ID`), los logs/CSV por trabajo y el historial de pronósticos en SQLite (`forecast_history`). Al llegar el lote real del día pronosticado, guarda sus conteos (`replay_observations`) y calcula el error contra los pronósticos previos. Nunca usa una estimación ni una solicitud sintética como etiqueta. No hay evaluación del último día pronosticado si el histórico termina antes de que llegue su observación.
+
+El panel consulta el estado cada tres segundos: corte, etapa, aplicación YARN, próxima corrida, pronósticos publicados y errores contra lotes posteriores. El portal público detecta una publicación nueva y actualiza las predicciones cada 15 segundos; si el usuario estaba mirando el último día, sigue el nuevo pronóstico.
+
+La configuración y la cola sobreviven al reinicio del proceso. Un fallo pausa el programa para revisión. El modo local muestra este monitor, pero no habilita corridas distribuidas. Las instancias deben permanecer encendidas: cerrar el navegador no detiene el motor, pero eliminar/terminar EC2 sí. El temporizador de autodestrucción sigue vigente, y mientras el clúster esté encendido consume los recursos de AWS de la cuenta.
+
+El lanzamiento prepara el motor; la reproducción empieza al programarla en el panel. La actualización no habilita automáticamente un bucle de trabajo con costo. Las pruebas locales validan el programador, la publicación transaccional y la separación de observaciones/pronósticos; la validación completa de Spark/YARN requiere una corrida en el clúster.
+
 ## Laboratorio local: modelos y solicitudes persistentes
 
 Haz doble clic en `Demo-local.cmd`, o elige **Laboratorio local (sin AWS)** en `UrbanFlow.cmd`.
