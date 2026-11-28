@@ -30,8 +30,8 @@ def configure(body):
         if any(not isinstance(body.get(key), str) for key in ('months', 'start_day', 'end_day')):
             raise ValueError('Indica meses y fechas como texto.')
         months = body['months'].split(',')
-        if not 1 <= len(months) <= 6 or not all(re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', m) for m in months):
-            raise ValueError('Selecciona de uno a seis meses consecutivos YYYY-MM.')
+        if not 1 <= len(months) <= 24 or not all(re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', m) for m in months):
+            raise ValueError('Selecciona de uno a 24 meses consecutivos YYYY-MM.')
         numbers = [int(m[:4]) * 12 + int(m[5:]) for m in months]
         if numbers != list(range(numbers[0], numbers[0] + len(months))):
             raise ValueError('Los meses deben ser consecutivos y ordenados.')

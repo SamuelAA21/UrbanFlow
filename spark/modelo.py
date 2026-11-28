@@ -47,6 +47,7 @@ VARIABLES = ["zona_origen", "hora", "dia_semana", "fin_de_semana", "mes_num", "f
 spark = sesion("3 Modelo")
 zonas = spark.read.parquet(HDFS + "/referencia/zonas").withColumnRenamed("zona_id", "zona_origen")
 zh = spark.read.parquet(HDFS + "/agregado/zona_hora").select("fecha", "hora", "zona_origen", "viajes")
+storage = StorageLevel.DISK_ONLY if zh.count()>1000000 else StorageLevel.MEMORY_AND_DISK
 ultima_fecha = zh.agg(F.max('fecha')).collect()[0][0]
 corte = ultima_fecha - datetime.timedelta(days=args.dias_prueba)
 
@@ -75,14 +76,14 @@ datos = (calendario(malla)
          .withColumn("viajes_semana_pasada", F.lag("viajes", 168).over(w))
          .withColumn("media_7_dias", sum(F.lag("viajes", 24 * k).over(w) for k in range(1, 8)) / 7.0)
          .dropna(subset=["viajes_semana_pasada"]))
-datos.persist(StorageLevel.MEMORY_AND_DISK)
+datos.persist(storage)
 
 ultima_fecha = datos.agg(F.max("fecha")).collect()[0][0]
 corte = ultima_fecha - datetime.timedelta(days=args.dias_prueba)
 entreno = datos.filter(F.col("fecha") <= F.lit(corte))
 # Perfil histórico (media por zona, día de la semana y hora) usando SOLO entrenamiento: evita fuga de información.
 perfil = entreno.groupBy("zona_origen", "dia_semana", "hora").agg(F.avg("viajes").alias("perfil_historico"))
-entreno = entreno.join(perfil, ["zona_origen", "dia_semana", "hora"]).persist(StorageLevel.MEMORY_AND_DISK)
+entreno = entreno.join(perfil, ["zona_origen", "dia_semana", "hora"]).persist(storage)
 prueba = datos.filter(F.col("fecha") > F.lit(corte)).join(perfil, ["zona_origen", "dia_semana", "hora"], "left").fillna(0.0, ["perfil_historico"])
 n_entreno, n_prueba = entreno.count(), prueba.count()
 log("{} zonas activas | entrenamiento hasta {}: {:,} filas | prueba ({} días): {:,} filas".format(
@@ -114,7 +115,7 @@ for nombre, modelo_n in modelos.items():
     pred = modelo_n.transform(pred).withColumnRenamed("prediction", COLUMNA[nombre]).drop("variables")
 pred = (pred.withColumn("pred_perfil", F.col("perfil_historico"))
         .withColumn("pred_semana_pasada", F.col("viajes_semana_pasada").cast("double")))
-pred.persist(StorageLevel.MEMORY_AND_DISK)
+pred.persist(storage)
 metricas = {}
 for nombre, columna in [("Random Forest (MLlib)", "pred_rf"), ("Gradient-Boosted Trees (MLlib)", "pred_gbt"),
                         ("Línea base: promedio histórico", "pred_perfil"),
@@ -170,6 +171,7 @@ guardar_json(args.resultados, "metricas_modelo.json", {
     'selection_policy': 'Random Forest fixed a priori; GBT is a reported comparator, not selected on test',
     'deployment_training_until': ultima_fecha,
     'deployment_training_seconds': deployment_timer.segundos,
+    'persistence': str(storage),
     'model_path': model_path,
     'deployment_policy': 'Refit fixed RF on all real observations through cutoff after frozen temporal evaluation',
     'evaluation_mode': 'rolling one-day observations; no synthetic labels',

@@ -12,7 +12,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from . import cluster_status, laboratory, replay
+from . import cluster_status, laboratory, replay, city
 from .db import connect, rows
 from .settings import APP, SOURCE
 
@@ -149,6 +149,28 @@ def replay_status(request):
     return JSONResponse(replay.status())
 
 
+def city_status(request):
+    return JSONResponse(city.status())
+
+
+async def city_action(request):
+    if request.headers.get('content-type','').split(';')[0]!='application/json':
+        raise HTTPException(415,'Envia JSON.')
+    raw=bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw)>2_000_000:
+            raise HTTPException(413,'El lote supera 2 MB.')
+    try:
+        body=json.loads(raw)
+        handlers={'/api/city/control':city.configure,'/api/city/events':city.ingest,
+                  '/api/city/jobs':city.enqueue,'/api/city/tick':lambda _:city.tick()}
+        result=await run_in_threadpool(handlers[request.url.path],body)
+        return JSONResponse(result,status_code=201)
+    except (ValueError,TypeError) as error:
+        raise HTTPException(422,str(error))
+
+
 async def lab_action(request):
     if request.headers.get('content-type', '').split(';')[0] != 'application/json':
         raise HTTPException(415, 'Envia JSON.')
@@ -178,6 +200,11 @@ if ADMIN:
                Route("/api/cluster", cluster), Route('/laboratory', lab_page),
                Route('/api/lab', lab_status),
                Route('/api/replay', replay_status), Route('/api/replay', lab_action, methods=['POST']),
+               Route('/city',lambda _:FileResponse(WEB/'city.html')),
+               Route('/api/geography',geography),
+               Route('/api/city',city_status),
+               *[Route(path,city_action,methods=['POST']) for path in
+                 ('/api/city/control','/api/city/events','/api/city/jobs','/api/city/tick')],
                Route('/api/lab/train', lab_action, methods=['POST']),
                Route('/api/lab/requests', lab_action, methods=['POST'])]
 else:

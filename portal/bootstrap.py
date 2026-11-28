@@ -12,8 +12,8 @@ def main():
     if args.prepare is None:
         return
     months = args.prepare.split(",")
-    if not 1 <= len(months) <= 6 or not all(re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", m) for m in months):
-        parser.error("Selecciona entre uno y seis meses YYYY-MM.")
+    if not 1 <= len(months) <= 24 or not all(re.fullmatch(r"[0-9]{4}-(0[1-9]|1[0-2])", m) for m in months):
+        parser.error("Selecciona entre uno y 24 meses YYYY-MM.")
     numbers = [int(m[:4]) * 12 + int(m[5:]) for m in months]
     if numbers != list(range(numbers[0], numbers[0] + len(numbers))):
         parser.error("Los meses deben ser consecutivos, en orden y sin repeticiones.")

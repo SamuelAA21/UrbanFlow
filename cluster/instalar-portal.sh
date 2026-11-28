@@ -9,6 +9,7 @@ if [ -f "$runtime/urbanflow.sqlite3" ]; then
   active=$(python3 -c 'import sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); tables={r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type=\x27table\x27")}; jobs=c.execute("SELECT count(*) FROM jobs WHERE status IN (\x27running\x27,\x27queued\x27)").fetchone()[0]; enabled=c.execute("SELECT count(*) FROM replay_schedule WHERE enabled=1").fetchone()[0] if "replay_schedule" in tables else 0; print(jobs+enabled)' "$runtime/urbanflow.sqlite3")
   [ "$active" = 0 ] || { echo 'Deten la programacion y espera a que terminen los trabajos antes de actualizar el motor.'; exit 2; }
   systemctl stop urbanflow-worker.service || true
+  systemctl stop urbanflow-city.service 2>/dev/null || true
 fi
 dnf install -y python3-pip
 getent group urbanflow-read >/dev/null || groupadd --system urbanflow-read
@@ -63,6 +64,7 @@ make_unit public urbanflow-web "$python -m uvicorn portal.app:app --host 0.0.0.0
 make_unit admin hadoop "$python -m uvicorn portal.app:app --host 127.0.0.1 --port 8090 --no-proxy-headers" \
   "URBANFLOW_ADMIN=1" 'Environment=URBANFLOW_REPLAY_ENGINE=1'
 make_unit worker hadoop "$python -m portal.worker" "URBANFLOW_HOME=$app" ""
+make_unit city hadoop "$python -m portal.city_service" "URBANFLOW_HOME=$app" ""
 systemctl daemon-reload
 for unit in public admin; do
   systemctl enable "urbanflow-$unit.service"
@@ -70,6 +72,8 @@ for unit in public admin; do
 done
 systemctl enable "urbanflow-worker.service"
 systemctl restart "urbanflow-worker.service"
+systemctl enable urbanflow-city.service
+systemctl restart urbanflow-city.service
 curl --fail --silent --show-error --retry 8 --retry-connrefused http://127.0.0.1:8080/health
 curl --fail --silent --show-error --retry 8 --retry-connrefused http://127.0.0.1:8090/health
 echo

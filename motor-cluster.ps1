@@ -212,7 +212,8 @@ chown -R hadoop:hadoop "/opt/hadoop-__VERSION__" /data/hdfs /home/hadoop
 if __ES_MAESTRO__; then
   sudo -iu hadoop bash -lc 'hdfs namenode -format -nonInteractive -clusterId cluster-portable; hdfs --daemon start namenode; yarn --daemon start resourcemanager; mapred --daemon start historyserver'
 else
-  sudo -iu hadoop bash -lc 'hdfs --daemon start datanode; yarn --daemon start nodemanager'
+  sudo -iu hadoop env HADOOP_HEAPSIZE_MAX=256 HDFS_DATANODE_OPTS=-Xmx256m bash -lc 'hdfs --daemon start datanode'
+  sudo -iu hadoop env HADOOP_HEAPSIZE_MAX=256 YARN_NODEMANAGER_OPTS=-Xmx256m bash -lc 'yarn --daemon start nodemanager'
 fi
 
 touch /var/log/hadoop-ready

@@ -40,6 +40,53 @@ CREATE TABLE IF NOT EXISTS lab_models (
  id INTEGER PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
  artifact TEXT NOT NULL, metrics TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS city_sessions (
+ id INTEGER PRIMARY KEY, state TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ rate INTEGER NOT NULL, max_requests INTEGER NOT NULL, generated INTEGER NOT NULL DEFAULT 0,
+ clock_start TEXT NOT NULL, clock_speed INTEGER NOT NULL, clock_seconds REAL NOT NULL DEFAULT 0,
+ last_tick REAL NOT NULL, interval_minutes INTEGER NOT NULL, next_run REAL NOT NULL,
+ seed INTEGER NOT NULL, sample TEXT NOT NULL, error TEXT
+);
+CREATE TABLE IF NOT EXISTS city_events (
+ id INTEGER PRIMARY KEY, event_id TEXT NOT NULL UNIQUE, trip_id TEXT NOT NULL,
+ session_id INTEGER REFERENCES city_sessions(id), kind TEXT NOT NULL CHECK(kind IN ('requested','completed','cancelled')),
+ source TEXT NOT NULL CHECK(source IN ('simulated','driver_report')),
+ event_time TEXT NOT NULL, received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ origin INTEGER NOT NULL, destination INTEGER NOT NULL, payload TEXT NOT NULL,
+ archived INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS city_trip_phase ON city_events(trip_id,kind);
+CREATE UNIQUE INDEX IF NOT EXISTS city_one_terminal ON city_events(trip_id) WHERE kind IN ('completed','cancelled');
+CREATE INDEX IF NOT EXISTS city_export_queue ON city_events(archived,id);
+CREATE INDEX IF NOT EXISTS city_request_feed ON city_events(id) WHERE kind='requested';
+CREATE INDEX IF NOT EXISTS city_report_feed ON city_events(id) WHERE kind!='requested';
+CREATE TABLE IF NOT EXISTS city_counters (
+ source TEXT NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL,
+ PRIMARY KEY(source,kind)
+);
+CREATE TABLE IF NOT EXISTS city_engine (
+ id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL,
+ interval_minutes INTEGER NOT NULL, next_run REAL NOT NULL, error TEXT
+);
+CREATE TABLE IF NOT EXISTS city_pending (
+ trip_id TEXT PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES city_sessions(id),
+ due REAL NOT NULL, payload TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS city_pending_due ON city_pending(session_id,due);
+CREATE TABLE IF NOT EXISTS city_batches (
+ id INTEGER PRIMARY KEY, first_id INTEGER NOT NULL, last_id INTEGER NOT NULL,
+ path TEXT NOT NULL, rows INTEGER NOT NULL, bytes INTEGER NOT NULL DEFAULT 0,
+ state TEXT NOT NULL DEFAULT 'pending'
+);
+CREATE TABLE IF NOT EXISTS city_runs (
+ job_id INTEGER PRIMARY KEY REFERENCES jobs(id), high_water INTEGER NOT NULL,
+ previous_job INTEGER, metrics TEXT, status TEXT NOT NULL DEFAULT 'queued'
+);
+CREATE TABLE IF NOT EXISTS city_forecasts (
+ job_id INTEGER NOT NULL REFERENCES jobs(id), day TEXT NOT NULL, hour INTEGER NOT NULL,
+ zone INTEGER NOT NULL, estimate REAL NOT NULL, source TEXT NOT NULL,
+ PRIMARY KEY(job_id,day,hour,zone,source)
+);
 CREATE TABLE IF NOT EXISTS replay_schedule (
  id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL DEFAULT 0,
  months TEXT NOT NULL, next_day TEXT NOT NULL, end_day TEXT NOT NULL,
@@ -110,7 +157,28 @@ def replace_csv(conn, table, sql, path, convert):
 
 
 def publish(conn, job, folder):
-    if job["kind"] in ('prepare', 'replay'):
+    if job['kind'] in ('city_seed','benchmark','city'):
+        if job['kind']=='city_seed':
+            from .settings import RUNTIME
+            temporary=RUNTIME/'city_seed.json.tmp'
+            temporary.write_bytes((folder/'city_seed.json').read_bytes())
+            temporary.replace(RUNTIME/'city_seed.json')
+            return
+        if job['kind']=='benchmark':
+            details={name:json.loads((folder/(name+'.json')).read_text(encoding='utf-8'))
+                     for name in ('benchmark_1','benchmark_3')}
+            release(conn,'benchmark',job['id'],details)
+            return
+        metrics=json.loads((folder/'city_metrics.json').read_text(encoding='utf-8'))
+        conn.execute("UPDATE city_runs SET status='completed',metrics=? WHERE job_id=?",(json.dumps(metrics),job['id']))
+        forecast=folder/'city_forecasts.csv'
+        if forecast.exists():
+            with forecast.open(encoding='utf-8',newline='') as source:
+                conn.executemany('INSERT INTO city_forecasts(job_id,day,hour,zone,estimate,source) VALUES(?,?,?,?,?,?)',
+                    ((job['id'],r['day'],r['hour'],r['zone'],r['estimate'],r['source']) for r in csv.DictReader(source)))
+        release(conn,'city',job['id'],metrics)
+        return
+    if job["kind"] in ('prepare', 'replay','history'):
         replace_csv(conn, "profile", "INSERT INTO profile VALUES (?,?,?,?,?)", folder / "perfil.csv",
                     lambda r: (r["zona_origen"], r["dia_semana"], r["hora"], r["viajes"], r["dias"]))
         replace_csv(conn, "predictions", "INSERT INTO predictions VALUES (?,?,?,?,?,?)",

@@ -71,7 +71,8 @@ class LaboratoryTests(unittest.TestCase):
                 importlib.reload(application)
             for path, method in (('/api/lab', 'GET'), ('/api/lab/train', 'POST'),
                                  ('/api/lab/requests', 'POST'), ('/laboratory', 'GET'),
-                                 ('/api/replay', 'GET'), ('/api/replay', 'POST')):
+                                 ('/api/replay', 'GET'), ('/api/replay', 'POST'),
+                                 ('/api/city','GET'),('/api/city/events','POST'),('/city','GET')):
                 scope = Request({'type': 'http', 'method': method, 'path': path,
                                  'query_string': b'', 'headers': []}).scope
                 matches = [r for r in application.app.routes if r.matches(scope)[0] is Match.FULL]

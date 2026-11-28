@@ -77,7 +77,7 @@ function renderJobs(items) {
 
 function renderCluster(cluster) {
   const nodes = cluster.nodes;
-  const totals = nodes.reduce((sum, node) => ({
+  const totals = nodes.filter(node => node.state === 'RUNNING').reduce((sum, node) => ({
     usedMemory: sum.usedMemory + Number(node.usedMemoryMB || 0),
     memory: sum.memory + Number(node.usedMemoryMB || 0) + Number(node.availMemoryMB || 0),
     usedCores: sum.usedCores + Number(node.usedVirtualCores || 0),

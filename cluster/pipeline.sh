@@ -37,7 +37,7 @@ ejecutar_spark() {
   local inicio fin rc
   inicio=$(date +%s)
   echo "[UrbanFlow] spark-submit $nombre en YARN (3 ejecutores)..."
-  /opt/spark/bin/spark-submit --name "UrbanFlow - $nombre" "$@" > "$LOGS/$nombre.log" 2>&1 &
+  /opt/spark/bin/spark-submit --driver-memory 3g --name "UrbanFlow - $nombre" "$@" > "$LOGS/$nombre.log" 2>&1 &
   local pid=$!
   # Muestra en vivo solo los mensajes del proyecto, no el registro interno de Spark.
   tail -n +1 -f "$LOGS/$nombre.log" --pid=$pid | grep --line-buffered '\[UrbanFlow\]' || true
@@ -73,7 +73,12 @@ case "$PASO" in
     hdfs dfs -put -f "$APP/descargas/taxi_zone_lookup.csv" /urbanflow/referencia/taxi_zone_lookup.csv
     echo "[UrbanFlow] Datos crudos en HDFS (replicación x3 en los 3 DataNodes):"
     hdfs dfs -du -h /urbanflow/crudo/yellow | sed 's/^/[UrbanFlow]   /'
-    hdfs dfs -du -s /urbanflow/crudo/yellow | awk '{print $1}' > "$RES/bytes_crudos.txt"
+    bytes=0
+    for MES in ${MESES//,/ }; do
+      size=$(hdfs dfs -du -s "/urbanflow/crudo/yellow/yellow_tripdata_${MES}.parquet" | awk '{print $1}')
+      bytes=$((bytes + size))
+    done
+    echo "$bytes" > "$RES/bytes_crudos.txt"
     registrar_tiempo cargar $(( $(date +%s) - inicio ))
     ;;
   etl)
@@ -82,6 +87,17 @@ case "$PASO" in
     ;;
   perfil)
     ejecutar_spark perfil "$APP/spark/perfil_portal.py" --resultados "$RES"
+    ;;
+  city_seed)
+    ejecutar_spark city_seed "$APP/spark/city_seed.py" --resultados "$RES"
+    ;;
+  city)
+    ejecutar_spark city --executor-cores 1 --conf spark.network.timeout=600s "$APP/spark/city_process.py" --resultados "$RES"
+    ;;
+  benchmark_1|benchmark_3)
+    executors="${PASO#benchmark_}"
+    ejecutar_spark "$PASO" --conf "spark.executor.instances=$executors" --conf spark.dynamicAllocation.enabled=false \
+      "$APP/spark/benchmark.py" --meses "$MESES" --resultados "$RES" --ejecutores "$executors"
     ;;
   analisis)
     ejecutar_spark analisis "$APP/spark/analisis.py" --resultados "$RES"
@@ -94,7 +110,7 @@ case "$PASO" in
     ejecutar_spark grafos --jars "$GF_JAR" --py-files "$GF_JAR" "$APP/spark/grafos.py" --resultados "$RES"
     ;;
   modelo)
-    ejecutar_spark modelo "$APP/spark/modelo.py" --resultados "$RES"
+    ejecutar_spark modelo --executor-cores 1 --conf spark.network.timeout=600s "$APP/spark/modelo.py" --resultados "$RES"
     ;;
   streaming)
     ejecutar_spark streaming "$APP/spark/streaming.py" --resultados "$RES"

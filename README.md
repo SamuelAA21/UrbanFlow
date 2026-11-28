@@ -8,6 +8,30 @@ Haz doble clic en `UrbanFlow.cmd`. El lanzador permite iniciar sesión en AWS, d
 
 ## Motor periódico distribuido en AWS
 
+### Ciudad simulada y reportes individuales
+
+En el panel administrativo, **Ciudad en vivo** abre `/city`. La simulación se ejecuta en `urbanflow-city.service` del maestro EC2, no en el navegador. Este servicio envía un lote HTTP por segundo al backend y un exportador independiente archiva eventos en HDFS mediante archivos completos y renombrado atómico. Cerrar el navegador no detiene la ciudad.
+
+Primero termina la preparación del histórico y pulsa **Preparar semilla en Spark**. Se toma una muestra aleatoria acotada de viajes limpios reales. La distribución por hora/día, orígenes, destinos, duraciones, distancias y tarifas alimenta un generador estadístico con variación aleatoria. Es una muestra, no una réplica exacta de toda la población; los eventos nuevos tienen `source=simulated`.
+
+Al activar la ciudad, el servidor persiste una solicitud por viaje y deja pendiente un desenlace. Cuando avanza el reloj simulado, llega el reporte completado o cancelado. Solo los completados son etiquetas para el aprendizaje. Hay identificadores únicos e idempotencia por fase; el mismo viaje no puede terminar completado y cancelado a la vez. El ritmo medio se modula según el perfil horario/semanal de la muestra. El objetivo de solicitudes/s no es una garantía de rendimiento; la interfaz mide eventos efectivamente persistidos/s. Los eventos viajan en lotes HTTP y no equivalen a una conexión HTTP individual por viaje.
+
+Ejemplo acotado: 500 solicitudes/s medias objetivo, 200.000 solicitudes totales, reloj 300× e intervalo del motor de tres minutos. El límite es un millón de solicitudes por sesión. Al alcanzar el límite o pulsar detener se deja de crear solicitudes, se terminan los viajes pendientes y el motor sigue archivando/procesando los lotes restantes. Si se acumulan 100.000 eventos sin archivar, la creación aplica control de flujo. SQLite conserva los eventos individuales y HDFS recibe los archivos crudos. La compactación Parquet conserva snapshots incrementales por corrida; no se vuelve a leer el histórico crudo TLC para cada microbatch de ciudad.
+
+`POST /api/city/events` admite lotes privados de reportes `driver_report`, con ID de evento/viaje, fase, fecha, zonas y, para completados, inicio/fin/distancia/tarifa. Es un contrato de integración para un operador conectado al túnel privado. **No existe todavía una app pública ni autenticación de taxistas**, ni verificación de que un reporte humano corresponda a un viaje real. El acceso público no expone estas escrituras. El motor de eventos puede procesar reportes sin un generador activo; **Procesar lote disponible** habilita el motor si nunca se ha creado una sesión.
+
+Cada corrida usa un límite de ID ya archivado en HDFS y la última compactación completada, deduplica por evento, agrega completados y entrena modelos MLlib separados. La rama experimental usa histórico + simulaciones; la rama de reportes usa histórico + reportes de conductor y se entrena solo si hay suficientes celdas reportadas. No se cambia el modelo público de movilidad ni su evaluación real usando simulaciones. `city_forecasts` muestra el siguiente día de la cronología reportada. Son estimaciones experimentales de conteos reportados: las horas parciales y una cobertura incompleta pueden sesgar los datos; no se declara exactitud ni mejora sobre el mundo real sin validación independiente.
+
+Las tablas auditables son `city_sessions`, `city_events`, `city_pending`, `city_counters`, `city_batches`, `city_engine`, `city_runs` y `city_forecasts`. Un fallo de exportación no marca eventos como archivados; se reintenta la misma reserva. Los fallos Spark detienen el siguiente procesamiento para revisión sin borrar eventos. **Procesar lote disponible** permite reintentar después de corregir el fallo. Para respaldar la ciudad, descarga tanto SQLite como la evidencia HDFS usando los comandos descritos más abajo.
+
+### Ampliación y medición de escala
+
+La vista de ciudad permite **Ampliar y reentrenar histórico** para 1–24 meses consecutivos. Descarga meses públicos reales adicionales, ejecuta ETL y MLlib y publica el resultado. El campo trae un ejemplo de doce meses (julio de 2024–junio de 2025). No añade copias de los mismos viajes ni los presenta como información nueva.
+
+**Medir el mismo trabajo con 1 y 3 ejecutores** ejecuta dos aplicaciones YARN sobre las mismas columnas y agregaciones SQL del histórico indicado. Guarda registros, bytes lógicos, particiones, duración y filas/s en la publicación `benchmark`. La primera pasada puede calentar cachés para la segunda: es una medición inicial, no un estudio controlado repetido ni prueba de que una máquina sea incapaz de procesar los datos. La necesidad de distribución se justifica con requisitos de volumen, ritmo de llegada y latencia medidos, no inflando MB o contando réplicas como observaciones nuevas.
+
+`scripts/compare_model_runs.py` compara dos CSV de evaluación solo en fechas/zonas/horas comunes y verifica que las etiquetas reales sean iguales. Permite medir el efecto de ampliar el histórico sin confundir cambios de cobertura con mejora. Una reducción de error en esa prueba no garantiza mejora futura.
+
 La reproducción por lotes se ejecuta en el servicio `urbanflow-worker` del maestro EC2. Este programa corridas reales de Spark sobre YARN (tres ejecutores configurados), sin depender de que haya un navegador abierto. No crea una cuarta máquina ni ejecuta Spark en el computador del operador.
 
 1. Despliega o actualiza con `urbanflow.ps1 portal` y los meses deseados. Antes de actualizar, detén la programación y espera a que no haya trabajos pendientes o corriendo.
@@ -57,7 +81,7 @@ Para demostrarlo ante el profesor: muestra la comparación temporal, inicia 30 p
 
 Los millones de viajes comprimidos son una fuente real para ETL, agregaciones, ventanas temporales, grafos y MLlib. El laboratorio de solicitudes funciona en una máquina; su existencia no demuestra por sí sola necesidad de Hadoop. Tampoco deben contarse las tres réplicas HDFS como tres veces más información ni presentar simulaciones como crecimiento real del histórico.
 
-La justificación experimental pendiente es medir el mismo ETL/modelo sobre uno, tres y seis meses reales, comparando uno y tres ejecutores, con iguales reglas y parámetros. Registra bytes lógicos, viajes válidos, duración, memoria y tiempo de entrenamiento. Los scripts actuales permiten seleccionar hasta seis meses; no se ejecutó un nuevo benchmark distribuido por añadir este laboratorio. Las métricas de una comparación deben salir de ejecuciones medidas, no de estimaciones de escalabilidad.
+La vista de ciudad permite medir el mismo trabajo con uno y tres ejecutores. Para un estudio de escalabilidad completo, repite la medición con varios volúmenes reales y alterna el orden de ejecución para controlar cachés. Registra bytes lógicos, viajes válidos, duración, memoria y tiempo de entrenamiento. Se admiten hasta 24 meses. Las conclusiones deben salir de las ejecuciones medidas; una demostración de carga sintética no sustituye observaciones reales ni acredita por sí sola necesidad de Hadoop.
 
 ## Despliegue temporal en AWS
 

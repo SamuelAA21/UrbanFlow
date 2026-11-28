@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import signal
 import subprocess
@@ -34,6 +35,18 @@ def run_stage(job, name, folder, deadline):
     if job['kind'] == 'replay':
         env['URBANFLOW_CUTOFF'] = job['cutoff_day']
         env['URBANFLOW_MODEL_PATH'] = f"/urbanflow/modelos/replay/{job['id']}"
+    if job['kind']=='city':
+        with connect(readonly=True) as conn:
+            snapshot=conn.execute('SELECT * FROM city_runs WHERE job_id=?',(job['id'],)).fetchone()
+            previous=conn.execute('SELECT * FROM city_runs WHERE job_id=?',(snapshot['previous_job'],)).fetchone()
+            paths=[r[0] for r in conn.execute("SELECT path FROM city_batches WHERE state='archived' AND last_id>? AND first_id<=? ORDER BY first_id",
+                                             (previous['high_water'] if previous else 0,snapshot['high_water']))]
+        env['URBANFLOW_CITY_JOB']=str(job['id'])
+        env['URBANFLOW_CITY_HIGH']=str(snapshot['high_water'])
+        env['URBANFLOW_CITY_LOW']=str(previous['high_water'] if previous else 0)
+        env['URBANFLOW_CITY_PATHS']=json.dumps(paths)
+        if previous:
+            env['URBANFLOW_CITY_PREVIOUS']=f"/urbanflow/city/runs/{previous['job_id']}"
     if job["kind"] == "corridors":
         env["URBANFLOW_SQL_MONTH"] = job["months"]
     yarn_id = None
@@ -75,6 +88,10 @@ def fail(job_id, error):
                      WHERE job_id=? AND status='running'""", (job_id,))
         conn.execute("""UPDATE jobs SET status='failed',ended_at=CURRENT_TIMESTAMP,error=?
                      WHERE id=?""", (error, job_id))
+        if conn.execute("SELECT 1 FROM city_runs WHERE job_id=?",(job_id,)).fetchone():
+            conn.execute("UPDATE city_runs SET status='failed' WHERE job_id=?",(job_id,))
+            conn.execute("UPDATE city_sessions SET error=? WHERE id=(SELECT max(id) FROM city_sessions)",(error,))
+            conn.execute('UPDATE city_engine SET error=? WHERE id=1',(error,))
 
 
 def main():
@@ -93,7 +110,9 @@ def main():
             folder = RUNTIME / "runs" / str(job["id"])
             folder.mkdir(parents=True, exist_ok=False)
             deadline = time.monotonic() + MAX_JOB_SECONDS
-            for name in (PREPARE if job["kind"] in ('prepare', 'replay') else ("sql",)):
+            stages = PREPARE if job['kind'] in ('prepare','replay','history') else {
+                'city_seed':('city_seed',),'city':('city',),'benchmark':('cargar','benchmark_1','benchmark_3')}.get(job['kind'],('sql',))
+            for name in stages:
                 run_stage(job, name, folder, deadline)
             with connect() as conn:
                 publish(conn, job, folder)
