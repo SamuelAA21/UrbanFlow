@@ -41,6 +41,25 @@ class CityTests(unittest.TestCase):
             self.assertEqual(conn.execute('SELECT count(*) FROM predictions').fetchone()[0],0)
             self.assertEqual(conn.execute('SELECT count(*) FROM city_pending').fetchone()[0],0)
 
+    def test_stop_freezes_requests_while_pending_trips_finish(self):
+        with patch('portal.city.time.time',return_value=1000):
+            city.configure({'action':'start','rate':10,'max_requests':1000,'clock_speed':1})
+        with patch('portal.city.time.time',return_value=1001):
+            city.tick()
+        before=city.status()['session']['generated']
+        self.assertGreater(before,0)
+        city.configure({'action':'stop'})
+        self.assertEqual(city.status()['session']['state'],'draining')
+        with db.connect() as conn:
+            conn.execute('UPDATE city_sessions SET clock_speed=3600')
+        with patch('portal.city.time.time',return_value=1006):
+            city.tick()
+        data=city.status()
+        self.assertEqual(data['session']['generated'],before)
+        self.assertEqual(data['session']['state'],'completed')
+        counts={c['kind']:c['n'] for c in data['counts']}
+        self.assertEqual(counts.get('completed',0)+counts.get('cancelled',0),before)
+
     def test_driver_contract_idempotency_and_batch_rollback(self):
         event=dict(event_id='report-1',trip_id='driver-1',kind='completed',source='driver_report',
                    event_time='2025-07-01T10:10:00',pickup_time='2025-07-01T10:00:00',

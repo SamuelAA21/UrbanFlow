@@ -1,6 +1,17 @@
 import {api,byId,table,format,stamp} from './common.js';
 let lastCount=null,lastTime=null,pending=false,connected=false;
 let lastSeen=null;
+let engineEnabled=false,sessionState=null,activeAction=null;
+function controls(){
+  for(const id of ['start-city','stop-city','seed','expand-history','benchmark','run-city'])byId(id).disabled=!engineEnabled||pending;
+  byId('start-city').disabled ||= ['running','draining'].includes(sessionState);
+  byId('stop-city').disabled ||= sessionState!=='running';
+  byId('stop-city').textContent=activeAction==='stop'?'Deteniendo solicitudes…':sessionState==='draining'?'Solicitudes detenidas; terminando viajes':sessionState==='completed'?'Solicitudes detenidas':'Dejar de crear solicitudes';
+}
+function feedback(message){
+  byId('city-message').textContent=message;
+  byId('city-control-status').textContent=message;
+}
 const zones=new Map();
 api('geography').then(g=>{for(const f of g.features)zones.set(f.properties.zona_id,f.properties.zona);}).catch(()=>{});
 const zone=id=>zones.has(id)?`${zones.get(id)} (${id})`:id;
@@ -8,12 +19,15 @@ const labels={requested:'Solicitado',completed:'Completado',cancelled:'Cancelado
 const decimal=n=>Number(n).toLocaleString('es-CO',{maximumFractionDigits:2});
 async function action(path,body){
   if(pending)return;
-  pending=true;
+  pending=true;activeAction=body.action;controls();
+  feedback(body.action==='stop'?'Enviando la orden de detener nuevas solicitudes…':'Enviando la solicitud al servidor…');
   try{
     const result=await api('city/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    byId('city-message').textContent=result.id?`Solicitud guardada. ID #${result.id}.`:(result.message||'Acción registrada por el servidor.');
-  }catch(e){byId('city-message').textContent=e.message;}
-  finally{pending=false;}
+    feedback(result.id?`Solicitud guardada. ID #${result.id}.`:(result.message||'Acción registrada por el servidor.'));
+    if(body.action==='stop')sessionState='draining';
+    await refresh(false);
+  }catch(e){feedback(e.message);}
+  finally{pending=false;activeAction=null;controls();}
 }
 byId('city-form').onsubmit=e=>{e.preventDefault();action('control',{action:'start',rate:Number(byId('rate').value),max_requests:Number(byId('maximum').value),clock_speed:Number(byId('speed').value),interval_minutes:Number(byId('interval').value)});};
 byId('seed').onclick=()=>action('jobs',{action:'city_seed'});
@@ -21,9 +35,10 @@ byId('stop-city').onclick=()=>action('control',{action:'stop'});
 byId('run-city').onclick=()=>action('jobs',{action:'run_now'});
 byId('expand-history').onclick=()=>action('jobs',{action:'history',months:byId('history-months').value.trim()});
 byId('benchmark').onclick=()=>action('jobs',{action:'benchmark',months:byId('history-months').value.trim()});
-async function refresh(){
+async function refresh(schedule=true){
   try{
     const data=await api('city'),now=performance.now();
+    engineEnabled=data.engine_enabled;sessionState=data.session?.state;
     if(!connected){byId('city-message').textContent=data.engine_enabled?'Backend AWS conectado. El generador y el archivado se ejecutan en el servidor.':'Modo local de consulta. La generación requiere el motor AWS.';connected=true;}
     const total=data.counts.reduce((s,c)=>s+c.n,0),count=kind=>data.counts.filter(c=>c.kind===kind).reduce((s,c)=>s+c.n,0);
     if(lastCount!==null)byId('city-rate').textContent=decimal((total-lastCount)*1000/(now-lastTime));
@@ -31,6 +46,7 @@ async function refresh(){
     byId('city-total').textContent=format(total);byId('city-requests').textContent=format(count('requested'));byId('city-completed').textContent=format(count('completed'));
     const states={running:'Creando solicitudes',draining:'Terminando viajes pendientes',completed:'Sesión terminada'};
     byId('city-state').textContent=data.session?`${states[data.session.state]||data.session.state}: ${format(data.session.generated)} / ${format(data.session.max_requests)} solicitudes.${data.session.error?' Error del motor: '+data.session.error:''}`:'Sin sesión. Prepara la semilla y activa el generador en AWS.';
+    if(!pending)byId('city-control-status').textContent=sessionState==='draining'?`Nuevas solicitudes detenidas en ${format(data.session.generated)}. Solo siguen llegando resultados de los viajes pendientes.`:sessionState==='completed'?`Sesión terminada: ${format(data.session.generated)} solicitudes. No se están creando solicitudes nuevas.`:sessionState==='running'?'La ciudad está creando solicitudes. Puedes detenerlas con el botón.':'No hay una sesión activa.';
     byId('city-storage').textContent=`${format(data.hdfs_batches)} lotes HDFS · ${decimal(data.hdfs_logical_bytes/1e9)} GB lógicos · ${format(data.unarchived_events)} eventos pendientes de archivar.`;
     if(data.session){const d=new Date(data.session.clock_start+'Z');d.setTime(d.getTime()+data.session.clock_seconds*1000);byId('city-clock').textContent=`Reloj simulado: ${d.toISOString().slice(0,19).replace('T',' ')}. La columna de recepción muestra cuándo llegó realmente al backend.`;}
     table('city-feed',data.recent.map(e=>[e.id,e.trip_id,labels[e.kind],`${zone(e.origin)} → ${zone(e.destination)}`,e.event_time.replace('T',' '),stamp(e.received_at),e.source==='simulated'?'Simulado':'Reporte de conductor']),7);
@@ -40,10 +56,9 @@ async function refresh(){
     table('city-forecast',data.forecasts.map(f=>[f.job_id,f.day,f.hour,f.zone,decimal(f.estimate),f.source]),6);
     byId('city-forecast-total').textContent=(data.forecast_totals||[]).map(f=>`${f.day}: ${format(Math.round(f.total))} viajes reportados estimados en ${format(f.cells)} celdas (${f.source}).`).join(' ');
     const active=data.runs.find(r=>['queued','running'].includes(r.job_status));byId('city-job').textContent=active?`Trabajo #${active.job_id} · ${active.stage||'En cola'} · ${active.yarn_id||'Esperando YARN'}`:data.engine?.error?`Motor pendiente de revisión: ${data.engine.error}`:data.engine?.enabled?`Motor programado cada ${data.engine.interval_minutes} min; procesa cuando hay eventos nuevos archivados.`:'Sin corrida de ciudad activa.';
-    for(const id of ['start-city','stop-city','seed','expand-history','benchmark','run-city'])byId(id).disabled=!data.engine_enabled||pending;
-    byId('start-city').disabled ||= ['running','draining'].includes(data.session?.state);
+    controls();
   }catch(e){byId('city-message').textContent=e.message;}
-  setTimeout(refresh,1500);
+  if(schedule)setTimeout(refresh,1500);
 }
 async function benchmark(){
   try{const meta=await api('metadata'),b=meta.releases.benchmark?.details;

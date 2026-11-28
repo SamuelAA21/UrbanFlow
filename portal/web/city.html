@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>UrbanFlow | Ciudad en vivo</title><link rel="stylesheet" href="/assets/style.css?v=7">
-<script type="module" src="/assets/city.js?v=1"></script></head>
+<script type="module" src="/assets/city.js?v=2"></script></head>
 <body class="operations city-live"><header><div class="brand">Urban<span>Flow</span></div><a href="/">Centro de operación</a></header><main>
 <section class="intro operations-intro"><h1>Una ciudad que pide viajes.</h1>
 <p>El generador de AWS crea solicitudes individuales. Más tarde llegan reportes de viajes completados o cancelaciones. El backend los persiste y los workers procesan los lotes en HDFS. La actividad continúa si cierras esta página.</p>
@@ -15,7 +15,7 @@
 <label>Segundos simulados por segundo real<input id="speed" type="number" min="1" max="3600" value="300" required></label>
 <label>Intervalo del motor (minutos)<input id="interval" type="number" min="1" max="60" value="3" required></label>
 <button id="start-city">Activar ciudad en AWS</button><button id="stop-city" type="button">Dejar de crear solicitudes</button><button id="run-city" type="button">Procesar lote disponible</button>
-</form><p class="muted">El tráfico viaja en lotes HTTP para evitar una conexión por registro. La tasa lograda se mide abajo; depende de la capacidad disponible. Un máximo de un millón de solicitudes por sesión evita crecimiento sin límite. Si HDFS se retrasa, se aplica control de flujo.</p></section>
+</form><p id="city-control-status" role="status" aria-live="polite">Consultando el estado de la ciudad…</p><p class="muted">El tráfico viaja en lotes HTTP para evitar una conexión por registro. La tasa lograda se mide abajo; depende de la capacidad disponible. Un máximo de un millón de solicitudes por sesión evita crecimiento sin límite. Si HDFS se retrasa, se aplica control de flujo.</p></section>
 <section class="section"><h2>Actividad que está llegando</h2><p id="city-state" role="status">Sin sesión</p>
 <div class="engine-live"><div><span>Eventos guardados</span><strong id="city-total">0</strong></div><div><span>Solicitudes</span><strong id="city-requests">0</strong></div><div><span>Viajes completados</span><strong id="city-completed">0</strong></div><div><span>Eventos/s medidos</span><strong id="city-rate">—</strong></div></div>
 <p id="city-storage"></p><p id="city-clock"></p>
