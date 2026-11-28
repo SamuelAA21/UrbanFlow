@@ -121,13 +121,41 @@ function Complete-Distribution($State, $Distribution) {
 
 function Deploy-Distribution {
     $state = Read-PortalState
+    # A fresh cluster gets a fresh local state; reuse this portal's edge endpoint.
+    if (-not $state.CloudFrontId) {
+        $list = (Invoke-Aws @('cloudfront','list-distributions','--output','json')) | ConvertFrom-Json
+        $matches = @($list.DistributionList.Items | Where-Object { $_.Comment -eq 'UrbanFlow temporal HTTPS portal' })
+        if ($matches.Count -gt 1) { throw 'Hay varias distribuciones UrbanFlow. Revisa cual debe reutilizarse antes de continuar.' }
+        if ($matches.Count -eq 1) {
+            Set-StateValue $state 'CloudFrontId' $matches[0].Id
+            Set-StateValue $state 'CloudFrontDomain' $matches[0].DomainName
+            Save-PortalState $state
+        }
+    }
     $existing = Get-Distribution $state
+    Grant-CloudFrontOriginAccess $state
     if ($existing) {
-        Complete-Distribution $state $existing.Distribution
+        $master = (Invoke-Aws @('ec2','describe-instances','--instance-ids',$state.Instances.maestro,
+            '--region',$Region,'--query','Reservations[0].Instances[0]','--output','json')) | ConvertFrom-Json
+        if ($master.State.Name -ne 'running' -or -not $master.PublicDnsName) { throw 'El maestro no esta disponible.' }
+        $response = (Invoke-Aws @('cloudfront','get-distribution-config','--id',$state.CloudFrontId,'--output','json')) | ConvertFrom-Json
+        $origins = @($response.DistributionConfig.Origins.Items)
+        if ($origins.Count -ne 1 -or $origins[0].Id -ne 'urbanflow-origin') { throw 'La distribucion existente no tiene el origen esperado de UrbanFlow.' }
+        if ($origins[0].DomainName -ne $master.PublicDnsName -or -not $response.DistributionConfig.Enabled) {
+            $origins[0].DomainName = $master.PublicDnsName
+            $response.DistributionConfig.Enabled = $true
+            $file = Write-JsonTemp $response.DistributionConfig
+            try {
+                Invoke-Aws @('cloudfront','update-distribution','--id',$state.CloudFrontId,'--if-match',$response.ETag,
+                    '--distribution-config',"file://$file",'--output','json') | Out-Null
+            } finally { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }
+        }
+        Save-PortalState $state
+        $current = Get-Distribution $state
+        Complete-Distribution $state $current.Distribution
         return
     }
 
-    Grant-CloudFrontOriginAccess $state
     $master = (Invoke-Aws @('ec2', 'describe-instances', '--instance-ids', $state.Instances.maestro,
         '--region', $Region, '--query', 'Reservations[0].Instances[0]', '--output', 'json')) | ConvertFrom-Json
     if ($master.State.Name -ne 'running' -or -not $master.PublicDnsName) {
