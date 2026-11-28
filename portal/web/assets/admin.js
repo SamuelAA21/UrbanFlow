@@ -3,7 +3,8 @@ import {renderLearningEvidence} from './learning-evidence.js';
 
 const months = byId("month"), submit = byId("submit");
 const labels = {queued:"En cola",running:"En ejecución",completed:"Completado",failed:"Fallido"};
-const steps = {cargar:"Ingesta",etl:"Limpieza",perfil:"Perfil horario",modelo:"MLlib",sql:"Spark SQL"};
+const steps = {cargar:"Ingesta",etl:"Limpieza",perfil:"Perfil horario",modelo:"Entrenamiento MLlib",sql:"Spark SQL",city:"Modelo de ciudad",city_seed:"Semilla histórica",benchmark_1:"Medición con 1 ejecutor",benchmark_3:"Medición con 3 ejecutores"};
+const jobNames={prepare:'Preparación completa',history:'Ampliación del histórico y reentrenamiento',corridors:'Cálculo de corredores',city:'Actualización del modelo de ciudad',city_seed:'Preparación de semilla de ciudad',benchmark:'Comparación de rendimiento'};
 let busy = true, pending = false;
 
 const decimal = (value, digits = 2) => value == null ? "—" : Number(value).toLocaleString("es-CO", {maximumFractionDigits:digits});
@@ -63,7 +64,7 @@ function renderJobs(items) {
   for (const job of items) {
     const section = document.createElement("div"); section.className = "job";
     const title = document.createElement("strong"); title.className = job.status;
-    title.textContent = `#${job.id} · ${job.kind === 'replay' ? 'Lote histórico distribuido: corte ' + job.cutoff_day : job.kind === "prepare" ? "Preparación completa" : "Cálculo de corredores"} · ${labels[job.status]} ${duration(job.started_at, job.ended_at)}`;
+    title.textContent = `#${job.id} · ${job.kind === 'replay' ? 'Lote histórico distribuido: corte ' + job.cutoff_day : jobNames[job.kind]||job.kind} · ${labels[job.status]} ${duration(job.started_at, job.ended_at)}`;
     const detail = document.createElement("p"); detail.className = "muted";
     detail.textContent = `${job.months} · Solicitado ${stamp(job.created_at)}${job.error ? ` · ${job.error}` : ""}`;
     const list = document.createElement("ol");

@@ -13,7 +13,12 @@ def read(path):
 def status():
     try:
         nodes = (read("nodes").get("nodes") or {}).get("node", [])
-        apps = (read("apps?limit=12").get("apps") or {}).get("app", [])
+        apps = (read("apps").get("apps") or {}).get("app", [])
+        # RM does not guarantee that its limited response contains the latest apps.
+        # Keep active work visible even after many completed applications accumulate.
+        active_states={'NEW','NEW_SAVING','SUBMITTED','ACCEPTED','RUNNING'}
+        apps=sorted(apps,key=lambda app:(app.get('state') in active_states,
+                    app.get('startedTime',0),app.get('id','')),reverse=True)[:12]
     except (OSError, URLError, ValueError):
         return {"available": False, "nodes": [], "applications": []}
     return {
