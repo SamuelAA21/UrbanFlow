@@ -100,6 +100,28 @@ class CityTests(unittest.TestCase):
         city.queue_processing()
         self.assertIsNone(worker.claim())
 
+    def test_manual_processing_reports_no_data_archive_wait_queue_and_active_job(self):
+        result=city.enqueue({'action':'run_now'})
+        self.assertEqual(result['status'],'no_new_data')
+        with db.connect() as conn:
+            city.store(conn,dict(event_id='e',trip_id='t',kind='requested',source='simulated',
+                                 event_time='2025-07-01T10:00:00',origin=132,destination=161))
+        self.assertEqual(city.enqueue({'action':'run_now'})['status'],'waiting_archive')
+        with db.connect() as conn:
+            conn.execute("INSERT INTO city_batches(first_id,last_id,path,rows,state) VALUES(1,1,'/test.jsonl',1,'archived')")
+            conn.execute('UPDATE city_events SET archived=1')
+        queued=city.enqueue({'action':'run_now'})
+        self.assertEqual(queued['status'],'queued')
+        self.assertEqual(queued['new_event_rows'],1)
+        active=city.enqueue({'action':'run_now'})
+        self.assertEqual(active['status'],'waiting_job')
+        self.assertEqual(active['active_job_id'],queued['id'])
+        with db.connect() as conn:
+            self.assertEqual(conn.execute('SELECT count(*) FROM jobs').fetchone()[0],1)
+            conn.execute("UPDATE jobs SET status='completed'")
+            conn.execute("UPDATE city_runs SET status='completed'")
+        self.assertEqual(city.enqueue({'action':'run_now'})['status'],'no_new_data')
+
     def test_failed_export_keeps_events_for_retry(self):
         with db.connect() as conn:
             city.store(conn,dict(event_id='e',trip_id='t',kind='requested',source='driver_report',

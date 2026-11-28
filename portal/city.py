@@ -180,13 +180,15 @@ def queue_processing():
     """Only process an immutable HDFS high-water snapshot, never unarchived rows."""
     with connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
-        if conn.execute("SELECT 1 FROM jobs WHERE status IN ('queued','running')").fetchone():
-            return
+        active = conn.execute("SELECT id,kind,status FROM jobs WHERE status IN ('queued','running') ORDER BY id LIMIT 1").fetchone()
+        if active:
+            return {'status':'waiting_job','active_job_id':active['id'],'job_kind':active['kind'],
+                    'message':f"El trabajo #{active['id']} ya está en cola o ejecutándose. No se inicia otro a la vez; el lote pendiente se procesará después."}
         engine = conn.execute('SELECT * FROM city_engine WHERE id=1 AND enabled=1').fetchone()
         if not engine or time.time()<engine['next_run']:
-            return
+            return {'status':'scheduled','message':'El motor está esperando su próxima ejecución programada.'}
         if engine['error']:
-            return
+            return {'status':'blocked','message':engine['error']}
         previous = conn.execute("SELECT * FROM city_runs WHERE status='completed' ORDER BY job_id DESC LIMIT 1").fetchone()
         low = previous['high_water'] if previous else 0
         high = conn.execute('SELECT coalesce(max(last_id),0) FROM city_batches WHERE state=\'archived\'').fetchone()[0]
@@ -195,12 +197,19 @@ def queue_processing():
         if gap is not None:
             high=min(high,gap-1)
         if high<=low:
-            return
+            pending = conn.execute('SELECT coalesce(sum(n),0) FROM city_counters').fetchone()[0]
+            pending -= conn.execute("SELECT coalesce(sum(rows),0) FROM city_batches WHERE state='archived'").fetchone()[0]
+            if pending>0:
+                return {'status':'waiting_archive','pending_events':pending,
+                        'message':f'Esperando que {pending} eventos lleguen a HDFS. El procesamiento comenzará automáticamente al archivarse.'}
+            return {'status':'no_new_data','message':'No hay eventos nuevos archivados por procesar. El último lote ya fue procesado; activa la ciudad para recibir más viajes.'}
         job = conn.execute("INSERT INTO jobs(kind,months,status) VALUES('city','city','queued')").lastrowid
         conn.execute('INSERT INTO city_runs(job_id,high_water,previous_job) VALUES(?,?,?)',
                      (job,high,previous['job_id'] if previous else None))
         conn.execute('UPDATE city_engine SET next_run=? WHERE id=1',
                      (time.time()+engine['interval_minutes']*60,))
+        return {'status':'queued','id':job,'new_event_rows':high-low,
+                'message':f'Trabajo #{job} en cola: {high-low} eventos nuevos. El pronóstico se actualizará cuando termine el cálculo, si hay suficientes viajes completados.'}
 
 
 def status():
@@ -218,11 +227,13 @@ def status():
         forecast = rows(conn,'SELECT * FROM city_forecasts WHERE job_id=(SELECT max(job_id) FROM city_forecasts) ORDER BY day,hour,zone LIMIT 30')
         forecast_totals=rows(conn,'SELECT day,source,count(*) AS cells,sum(estimate) AS total FROM city_forecasts WHERE job_id=(SELECT max(job_id) FROM city_forecasts) GROUP BY day,source')
         engine=conn.execute('SELECT * FROM city_engine WHERE id=1').fetchone()
+        active_job=conn.execute("SELECT id,kind,status,stage FROM jobs WHERE status IN ('queued','running') ORDER BY id LIMIT 1").fetchone()
     return {'engine_enabled':os.environ.get('URBANFLOW_REPLAY_ENGINE')=='1',
             'session':dict(session) if session else None,'counts':counts,'hdfs_batches':totals[0],
             'hdfs_logical_bytes':totals[1],'recent':recent,'runs':runs,'forecasts':forecast,
             'unarchived_events':sum(c['n'] for c in counts)-totals[2],
             'engine':dict(engine) if engine else None,
+            'active_job':dict(active_job) if active_job else None,
             'forecast_totals':forecast_totals,
             'training_policy':'Only completed reports; simulated model separate from real mobility model. No guarantee of improved real-world accuracy.'}
 
@@ -238,8 +249,7 @@ def enqueue(body):
         with connect() as conn:
             conn.execute('INSERT INTO city_engine VALUES(1,1,3,0,NULL) ON CONFLICT(id) DO UPDATE SET enabled=1,next_run=0,error=NULL')
             conn.execute('UPDATE city_sessions SET error=NULL')
-        queue_processing()
-        return {'status':'requested'}
+        return queue_processing()
     with connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
         if conn.execute("SELECT 1 FROM jobs WHERE status IN ('queued','running')").fetchone():

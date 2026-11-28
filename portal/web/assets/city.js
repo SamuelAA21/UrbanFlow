@@ -2,11 +2,34 @@ import {api,byId,table,format,stamp} from './common.js';
 let lastCount=null,lastTime=null,pending=false,connected=false;
 let lastSeen=null;
 let engineEnabled=false,sessionState=null,activeAction=null;
+let trackedJob=null,processingNotice='',waitingArchive=false,processingBusy=false;
+function processing(data){
+  const active=data.runs.find(r=>['queued','running'].includes(r.job_status));
+  const tracked=data.runs.find(r=>r.job_id===trackedJob);
+  if(active){
+    trackedJob=active.job_id;waitingArchive=false;processingBusy=true;
+    processingNotice=`Trabajo #${active.job_id}: ${active.job_status==='queued'?'en cola':'procesando en Spark'} · ${active.stage||'preparación'} · ${active.yarn_id||'esperando YARN'}. El cálculo puede tardar varios minutos.`;
+  }else if(tracked&&['completed','failed'].includes(tracked.job_status)){
+    processingBusy=false;trackedJob=null;
+    processingNotice=tracked.job_status==='failed'?`El trabajo #${tracked.job_id} falló: ${tracked.error||'revisa los trabajos del motor'}.`:`Trabajo #${tracked.job_id} completado. ${data.forecasts.some(f=>f.job_id===tracked.job_id)?'Pronóstico experimental actualizado; puedes verlo más abajo.':'No se publicó un pronóstico nuevo; revisa si hay suficientes viajes completados.'}`;
+  }else if(data.active_job){
+    processingBusy=true;
+    processingNotice=`Esperando el trabajo #${data.active_job.id} (${data.active_job.kind}). El motor ejecuta un trabajo a la vez.`;
+  }else if(waitingArchive){
+    processingNotice=data.unarchived_events>0?`Esperando el archivado en HDFS: ${format(data.unarchived_events)} eventos pendientes.`:'Datos archivados. Esperando que el motor inicie el cálculo disponible.';
+  }else if(processingBusy&&!pending){
+    processingBusy=false;
+    processingNotice='El motor está libre. Los lotes pendientes se iniciarán automáticamente; puedes volver a comprobar con Procesar lote disponible.';
+  }
+  byId('city-processing-status').textContent=processingNotice||'Sin cálculo activo. Procesar lote disponible comprueba si hay eventos nuevos.';
+  byId('city-processing-progress').hidden=!processingBusy;
+}
 function controls(){
   for(const id of ['start-city','stop-city','seed','expand-history','benchmark','run-city'])byId(id).disabled=!engineEnabled||pending;
   byId('start-city').disabled ||= ['running','draining'].includes(sessionState);
   byId('stop-city').disabled ||= sessionState!=='running';
   byId('stop-city').textContent=activeAction==='stop'?'Deteniendo solicitudes…':sessionState==='draining'?'Solicitudes detenidas; terminando viajes':sessionState==='completed'?'Solicitudes detenidas':'Dejar de crear solicitudes';
+  byId('run-city').textContent=activeAction==='run_now'?'Consultando lote…':'Procesar lote disponible';
 }
 function feedback(message){
   byId('city-message').textContent=message;
@@ -21,12 +44,21 @@ async function action(path,body){
   if(pending)return;
   pending=true;activeAction=body.action;controls();
   feedback(body.action==='stop'?'Enviando la orden de detener nuevas solicitudes…':'Enviando la solicitud al servidor…');
+  if(body.action==='run_now'){
+    processingBusy=true;byId('city-processing-status').textContent='Comprobando el lote disponible en el servidor…';byId('city-processing-progress').hidden=false;
+  }
   try{
     const result=await api('city/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    feedback(result.id?`Solicitud guardada. ID #${result.id}.`:(result.message||'Acción registrada por el servidor.'));
+    feedback(result.message||(result.id?`Solicitud guardada. ID #${result.id}.`:'Acción registrada por el servidor.'));
+    if(body.action==='run_now'){
+      processingNotice=result.message||'Solicitud recibida por el motor.';
+      trackedJob=result.id||(result.job_kind==='city'?result.active_job_id:null);
+      waitingArchive=result.status==='waiting_archive';
+      processingBusy=['queued','waiting_job','waiting_archive'].includes(result.status);
+    }
     if(body.action==='stop')sessionState='draining';
     await refresh(false);
-  }catch(e){feedback(e.message);}
+  }catch(e){feedback(e.message);if(body.action==='run_now'){processingNotice=e.message;processingBusy=false;byId('city-processing-status').textContent=e.message;byId('city-processing-progress').hidden=true;}}
   finally{pending=false;activeAction=null;controls();}
 }
 byId('city-form').onsubmit=e=>{e.preventDefault();action('control',{action:'start',rate:Number(byId('rate').value),max_requests:Number(byId('maximum').value),clock_speed:Number(byId('speed').value),interval_minutes:Number(byId('interval').value)});};
@@ -56,6 +88,7 @@ async function refresh(schedule=true){
     table('city-forecast',data.forecasts.map(f=>[f.job_id,f.day,f.hour,f.zone,decimal(f.estimate),f.source]),6);
     byId('city-forecast-total').textContent=(data.forecast_totals||[]).map(f=>`${f.day}: ${format(Math.round(f.total))} viajes reportados estimados en ${format(f.cells)} celdas (${f.source}).`).join(' ');
     const active=data.runs.find(r=>['queued','running'].includes(r.job_status));byId('city-job').textContent=active?`Trabajo #${active.job_id} · ${active.stage||'En cola'} · ${active.yarn_id||'Esperando YARN'}`:data.engine?.error?`Motor pendiente de revisión: ${data.engine.error}`:data.engine?.enabled?`Motor programado cada ${data.engine.interval_minutes} min; procesa cuando hay eventos nuevos archivados.`:'Sin corrida de ciudad activa.';
+    processing(data);
     controls();
   }catch(e){byId('city-message').textContent=e.message;}
   if(schedule)setTimeout(refresh,1500);
