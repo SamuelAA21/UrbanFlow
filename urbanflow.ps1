@@ -245,7 +245,7 @@ function Show-State {
 function Remove-All {
     Test-Login
     $edgeScript = Join-Path $Raiz 'scripts\cloudfront-portal.ps1'
-    if (Test-Path (State-Path) -and (Test-Path $edgeScript)) {
+    if ((Test-Path -LiteralPath (State-Path)) -and (Test-Path -LiteralPath $edgeScript)) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $edgeScript delete -Region $Region
         if ($LASTEXITCODE -ne 0) { throw 'No se pudo retirar CloudFront; se detiene la limpieza para no dejar un recurso huérfano.' }
     }
