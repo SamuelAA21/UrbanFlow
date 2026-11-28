@@ -22,6 +22,8 @@ La elección de Random Forest queda fijada antes de evaluar, en lugar de escoger
 
 El motor guarda los modelos por corrida en HDFS (`/urbanflow/modelos/replay/ID`), los logs/CSV por trabajo y el historial de pronósticos en SQLite (`forecast_history`). Al llegar el lote real del día pronosticado, guarda sus conteos (`replay_observations`) y calcula el error contra los pronósticos previos. Nunca usa una estimación ni una solicitud sintética como etiqueta. No hay evaluación del último día pronosticado si el histórico termina antes de que llegue su observación.
 
+Antes de eliminar el clúster, `urbanflow.ps1 respaldo` descarga una copia consistente de SQLite. Para conservar también modelos y resultados, `scripts/backup_evidence.sh` se ejecuta como usuario `hadoop` en el maestro después de terminar los trabajos: genera un `.tgz` con los modelos de reproducción y los CSV/logs de las corridas. Descarga ese archivo al computador; crear el paquete únicamente en EC2 no lo protege de la autodestrucción.
+
 El panel consulta el estado cada tres segundos: corte, etapa, aplicación YARN, próxima corrida, pronósticos publicados y errores contra lotes posteriores. El portal público detecta una publicación nueva y actualiza las predicciones cada 15 segundos; si el usuario estaba mirando el último día, sigue el nuevo pronóstico.
 
 La configuración y la cola sobreviven al reinicio del proceso. Un fallo pausa el programa para revisión. El modo local muestra este monitor, pero no habilita corridas distribuidas. Las instancias deben permanecer encendidas: cerrar el navegador no detiene el motor, pero eliminar/terminar EC2 sí. El temporizador de autodestrucción sigue vigente, y mientras el clúster esté encendido consume los recursos de AWS de la cuenta.
