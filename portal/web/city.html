@@ -1,11 +1,18 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>UrbanFlow | Ciudad en vivo</title><link rel="stylesheet" href="/assets/style.css?v=7">
-<script type="module" src="/assets/city.js?v=3"></script></head>
+<title>UrbanFlow | Ciudad en vivo</title><link rel="stylesheet" href="/assets/style.css?v=8">
+<script type="module" src="/assets/city.js?v=4"></script></head>
 <body class="operations city-live"><header><div class="brand">Urban<span>Flow</span></div><a href="/">Centro de operación</a></header><main>
 <section class="intro operations-intro"><h1>Una ciudad que pide viajes.</h1>
 <p>El generador de AWS crea solicitudes individuales. Más tarde llegan reportes de viajes completados o cancelaciones. El backend los persiste y los workers procesan los lotes en HDFS. La actividad continúa si cierras esta página.</p>
 <p id="city-message" role="status">Conectando con el motor…</p></section>
+<section class="section learning-proof" id="city-learning-proof" aria-labelledby="proof-title">
+<p class="section-label">Simulación · evidencia del entrenamiento</p><h2 id="proof-title">¿El modelo ya usó los viajes nuevos?</h2>
+<p id="proof-status" class="proof-verdict" role="status">Consultando los viajes guardados y la última versión entrenada…</p>
+<div class="engine-live"><div><span>Viajes completados guardados</span><strong id="proof-saved">—</strong></div><div><span>Viajes incluidos en el modelo</span><strong id="proof-included">—</strong></div><div><span>Viajes pendientes de incorporar</span><strong id="proof-pending">—</strong></div><div><span>Último modelo experimental</span><strong id="proof-version">—</strong></div></div>
+<p id="proof-comparison"></p><p id="proof-publication" class="muted"></p>
+<p class="muted">Se cuentan viajes simulados completados, no solicitudes ni cancelaciones. Este modelo experimental está separado del modelo histórico del mapa. Incorporar datos nuevos no demuestra por sí solo una mejora de precisión real.</p>
+</section>
 <section class="section"><h2>Activar la ciudad simulada</h2>
 <p>La distribución de origen, destino, hora, distancia y tarifa parte de una muestra de viajes históricos reales. Los registros nuevos se identifican como simulados; generar más no añade observaciones reales.</p>
 <button id="seed">Preparar semilla en Spark</button>

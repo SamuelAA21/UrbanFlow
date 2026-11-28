@@ -1,4 +1,5 @@
 import {api, byId, option, table, format, stamp} from "./common.js";
+import {renderLearningEvidence} from './learning-evidence.js';
 
 const months = byId("month"), submit = byId("submit");
 const labels = {queued:"En cola",running:"En ejecución",completed:"Completado",failed:"Fallido"};
@@ -129,3 +130,10 @@ byId("run").addEventListener("submit", async event => {
   }
 });
 refresh();
+
+async function refreshEvidence(){
+  try{renderLearningEvidence(await api('city'));}
+  catch(error){byId('proof-status').textContent=`No se pudo consultar la evidencia: ${error.message}`;}
+  setTimeout(refreshEvidence,4000);
+}
+refreshEvidence();

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>UrbanFlow | Operación</title>
-  <link rel="stylesheet" href="/assets/style.css?v=6">
-  <script type="module" src="/assets/admin.js?v=5"></script>
+  <link rel="stylesheet" href="/assets/style.css?v=8">
+  <script type="module" src="/assets/admin.js?v=6"></script>
   <script type="module" src="/assets/replay.js?v=1"></script>
 </head>
 <body class="operations">
@@ -17,6 +17,16 @@
       <p id="notice" class="release" role="status">Consultando backend, modelo y YARN…</p>
       <p><a href="/city">Abrir ciudad en vivo: solicitudes, viajes y procesamiento distribuido</a></p>
       <p><a href="/laboratory">Laboratorio de comparación estadística</a></p>
+    </section>
+
+    <section class="section learning-proof" id="city-learning-proof" aria-labelledby="proof-title">
+      <p class="section-label">Simulación · evidencia del entrenamiento</p>
+      <h2 id="proof-title">¿El modelo ya usó los viajes nuevos?</h2>
+      <p id="proof-status" class="proof-verdict" role="status">Consultando los viajes guardados y la última versión entrenada…</p>
+      <div class="engine-live"><div><span>Viajes completados guardados</span><strong id="proof-saved">—</strong></div><div><span>Viajes incluidos en el modelo</span><strong id="proof-included">—</strong></div><div><span>Viajes pendientes de incorporar</span><strong id="proof-pending">—</strong></div><div><span>Último modelo experimental</span><strong id="proof-version">—</strong></div></div>
+      <p id="proof-comparison"></p><p id="proof-publication" class="muted"></p>
+      <p class="muted">Se cuentan viajes simulados completados, no solicitudes ni cancelaciones. Este modelo experimental está separado del modelo histórico del mapa. Incorporar datos nuevos no demuestra por sí solo una mejora de precisión real.</p>
+      <p><a href="/city#city-learning-proof">Abrir ciudad en vivo y ver el pronóstico experimental</a></p>
     </section>
 
     <section class="section replay-panel" aria-labelledby="replay-title">

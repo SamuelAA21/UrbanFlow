@@ -1,4 +1,5 @@
 import {api,byId,table,format,stamp} from './common.js';
+import {renderLearningEvidence} from './learning-evidence.js';
 let lastCount=null,lastTime=null,pending=false,connected=false;
 let lastSeen=null;
 let engineEnabled=false,sessionState=null,activeAction=null;
@@ -70,6 +71,7 @@ byId('benchmark').onclick=()=>action('jobs',{action:'benchmark',months:byId('his
 async function refresh(schedule=true){
   try{
     const data=await api('city'),now=performance.now();
+    renderLearningEvidence(data);
     engineEnabled=data.engine_enabled;sessionState=data.session?.state;
     if(!connected){byId('city-message').textContent=data.engine_enabled?'Backend AWS conectado. El generador y el archivado se ejecutan en el servidor.':'Modo local de consulta. La generación requiere el motor AWS.';connected=true;}
     const total=data.counts.reduce((s,c)=>s+c.n,0),count=kind=>data.counts.filter(c=>c.kind===kind).reduce((s,c)=>s+c.n,0);

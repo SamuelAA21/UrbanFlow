@@ -132,6 +132,34 @@ class CityTests(unittest.TestCase):
         self.assertEqual(city.status()['unarchived_events'],1)
         self.assertEqual(city.status()['hdfs_batches'],0)
 
+    def test_evidence_counts_only_completed_simulations_in_successfully_trained_snapshots(self):
+        with db.connect() as conn:
+            conn.executemany('INSERT INTO city_counters VALUES(?,?,?)',[
+                ('simulated','completed',9),('simulated','requested',20),('simulated','cancelled',3),
+                ('driver_report','completed',100)])
+        empty=city.status()['simulation_evidence']
+        self.assertIsNone(empty['model_job_id'])
+        self.assertEqual(empty['pending_completed'],9)
+        def snapshot(completed,trained=True,status='completed'):
+            with db.connect() as conn:
+                job=conn.execute("INSERT INTO jobs(kind,months,status,ended_at) VALUES('city','city',?,'2026-11-28 06:00:00')",(status,)).lastrowid
+                metrics={'counts':{'simulated:completed':completed},'new_event_rows':10,
+                         'training':{'simulated':{'model_path':f'/models/{job}','forecast_day':'2025-07-03'}} if trained else {}}
+                conn.execute('INSERT INTO city_runs(job_id,high_water,metrics,status) VALUES(?,?,?,?)',
+                             (job,job*10,json.dumps(metrics),status))
+            return job
+        first=snapshot(5)
+        snapshot(9,status='failed')
+        snapshot(8,trained=False)
+        e=city.status()['simulation_evidence']
+        self.assertEqual((e['model_job_id'],e['saved_completed'],e['included_completed'],e['pending_completed']),(first,9,5,4))
+        latest=snapshot(8)
+        with db.connect() as conn:
+            conn.execute("INSERT INTO city_forecasts VALUES(?,'2025-07-03',1,132,42,'simulated')",(latest,))
+        e=city.status()['simulation_evidence']
+        self.assertEqual((e['model_job_id'],e['previous_job_id'],e['previous_included_completed']),(latest,first,5))
+        self.assertEqual((e['included_completed'],e['pending_completed'],e['forecast_cells']),(8,1,1))
+
     def test_city_publication_keeps_real_model_and_forecasts_separate(self):
         with db.connect() as conn:
             job=conn.execute("INSERT INTO jobs(kind,months,status) VALUES('city','city','completed')").lastrowid

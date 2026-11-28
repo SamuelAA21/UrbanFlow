@@ -13,3 +13,4 @@
 @media(max-width:850px){.replay-form,.engine-live{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.replay-form,.engine-live{grid-template-columns:1fr}}
 .city-live .new-arrival{animation:arrival-confirmation 1s ease-out}@keyframes arrival-confirmation{from{background:#c7eee7}to{background:white}}@media(prefers-reduced-motion:reduce){.city-live .new-arrival{animation:none}}
+.learning-proof .proof-verdict{background:#e3f2f1;border-left:4px solid var(--teal);padding:1rem;line-height:1.5}.learning-proof .engine-live strong{font-size:1.65rem}.learning-proof p{line-height:1.5;overflow-wrap:anywhere}#city-learning-proof{scroll-margin-top:1rem}

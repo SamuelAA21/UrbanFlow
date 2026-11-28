@@ -212,10 +212,40 @@ def queue_processing():
                 'message':f'Trabajo #{job} en cola: {high-low} eventos nuevos. El pronóstico se actualizará cuando termine el cálculo, si hay suficientes viajes completados.'}
 
 
+def simulation_evidence(conn, counts):
+    """Compare durable completions against snapshots that actually trained a model."""
+    saved = sum(c['n'] for c in counts if c['source']=='simulated' and c['kind']=='completed')
+    snapshots=[]
+    for run in conn.execute('''SELECT c.job_id,c.high_water,c.metrics,j.ended_at FROM city_runs c
+            JOIN jobs j ON j.id=c.job_id WHERE c.status='completed' AND j.status='completed'
+            ORDER BY c.job_id DESC'''):
+        metrics=json.loads(run['metrics']) if run['metrics'] else {}
+        training=metrics.get('training',{}).get('simulated')
+        if training and training.get('model_path'):
+            snapshots.append((run,metrics,training))
+            if len(snapshots)==2:
+                break
+    if not snapshots:
+        return {'saved_completed':saved,'included_completed':0,'pending_completed':saved,
+                'model_job_id':None,'previous_job_id':None,'previous_included_completed':None}
+    run,metrics,training=snapshots[0]
+    included=metrics.get('counts',{}).get('simulated:completed',0)
+    previous=snapshots[1] if len(snapshots)>1 else None
+    forecast=conn.execute('''SELECT count(*),coalesce(sum(estimate),0) FROM city_forecasts
+            WHERE job_id=? AND source='simulated' ''',(run['job_id'],)).fetchone()
+    return {'saved_completed':saved,'included_completed':included,'pending_completed':max(0,saved-included),
+            'model_job_id':run['job_id'],'trained_at':run['ended_at'],'model_path':training['model_path'],
+            'last_event_id':run['high_water'],'new_event_rows':metrics.get('new_event_rows'),
+            'previous_job_id':previous[0]['job_id'] if previous else None,
+            'previous_included_completed':previous[1].get('counts',{}).get('simulated:completed',0) if previous else None,
+            'forecast_day':training.get('forecast_day'),'forecast_cells':forecast[0],'forecast_total':forecast[1]}
+
+
 def status():
     with connect(readonly=True) as conn:
         session = conn.execute('SELECT id,state,created_at,rate,max_requests,generated,clock_start,clock_speed,clock_seconds,next_run,error FROM city_sessions ORDER BY id DESC LIMIT 1').fetchone()
         counts = rows(conn,'SELECT * FROM city_counters')
+        evidence = simulation_evidence(conn,counts)
         totals = conn.execute('SELECT count(*),coalesce(sum(bytes),0),coalesce(sum(rows),0) FROM city_batches WHERE state=\'archived\'').fetchone()
         columns='id,trip_id,kind,source,event_time,received_at,origin,destination,archived'
         recent=rows(conn,f"SELECT {columns} FROM city_events WHERE kind='requested' ORDER BY id DESC LIMIT 10")
@@ -235,6 +265,7 @@ def status():
             'engine':dict(engine) if engine else None,
             'active_job':dict(active_job) if active_job else None,
             'forecast_totals':forecast_totals,
+            'simulation_evidence':evidence,
             'training_policy':'Only completed reports; simulated model separate from real mobility model. No guarantee of improved real-world accuracy.'}
 
 
